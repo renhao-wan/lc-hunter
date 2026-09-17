@@ -221,8 +221,10 @@ await sleep(500);
 const modalAfterAll = await evaluate(`
   (() => {
     const b = document.getElementById('allPlansList');
-    const c = document.getElementById('allPlansToggle').querySelector('.caret');
-    return { hidden: b.hidden, offsetH: b.offsetHeight, caret: c?.textContent,
+    const c = document.getElementById('allPlansToggle').querySelector('.caret .chev');
+    // 箭头改成了 SVG，方向靠旋转 class 表达（不再有 ▾/▸ 两个字形可以比）
+    return { hidden: b.hidden, offsetH: b.offsetHeight,
+             caret: c ? (c.classList.contains('to-right') ? 'right' : 'down') : null,
              stored: localStorage.getItem('lc-hide-allplans') };
   })()
 `);
@@ -233,8 +235,9 @@ await sleep(400);
 const modalAfterMine = await evaluate(`
   (() => {
     const b = document.getElementById('myPlansList');
-    const c = document.getElementById('myPlansToggle').querySelector('.caret');
-    return { hidden: b.hidden, offsetH: b.offsetHeight, caret: c?.textContent };
+    const c = document.getElementById('myPlansToggle').querySelector('.caret .chev');
+    return { hidden: b.hidden, offsetH: b.offsetHeight,
+             caret: c ? (c.classList.contains('to-right') ? 'right' : 'down') : null };
   })()
 `);
 
@@ -262,7 +265,7 @@ const checks = [
   ['B 展开后代码区重新可见', withWorkspace.panelDisplay !== 'none'],
   ['C 「全部计划」有折叠标题', modalBefore.allToggleExists && modalBefore.allToggleHasCaret],
   ['C 点一下「全部计划」能收起', modalAfterAll.hidden === true && modalAfterAll.offsetH === 0],
-  ['C 收起后箭头翻转', modalAfterAll.caret === '▸'],
+  ['C 收起后箭头翻转', modalAfterAll.caret === 'right'],
   ['C 状态写进 localStorage', modalAfterAll.stored === '1'],
   ['C 点一下「我加入的计划」能收起', modalAfterMine.hidden === true && modalAfterMine.offsetH === 0],
   ['无 JS 报错', errs.length === 0],

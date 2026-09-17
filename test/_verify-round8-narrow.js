@@ -117,7 +117,12 @@ for (const [w, h, label] of [
         handleHidden: r ? r.hidden : null,
         handleW: rect ? Math.round(rect.width) : 0,
         handleH: rect ? Math.round(rect.height) : 0,
-        handleWriting: r ? getComputedStyle(r).writingMode : null,
+        // writing-mode 现在挂在把手内层的 .reopen-label 上（外层要留成正常书写
+        // 方向，flex 的主轴才是竖直的，才能把内容上下居中）。
+        // 量按钮本身的话两边都是 horizontal-tb，这条断言就废了 —— 必须量内层。
+        handleWriting: r
+          ? getComputedStyle(r.querySelector('.reopen-label') || r).writingMode
+          : null,
         handleInView: rect ? rect.top >= 0 && rect.bottom <= innerHeight : null,
         handleText: r ? r.textContent.trim() : null,
       };

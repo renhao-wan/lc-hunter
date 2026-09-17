@@ -150,11 +150,21 @@ const handle = await evaluate(`
     const rect = r.getBoundingClientRect();
     const main = document.getElementById('mainArea');
     const cols = getComputedStyle(main).gridTemplateColumns.split(' ').map(x => Math.round(parseFloat(x)));
+    // writing-mode 挂在内层 .reopen-label 上（外层按钮要留成正常书写方向，
+    // flex 主轴才竖直，内容才能上下居中）。量按钮本身永远是 horizontal-tb，
+    // 区分不出桌面竖排 / 窄屏横排，所以这里量内层。
+    const label = r.querySelector('.reopen-label') || r;
+    // 内容组（文字 + 箭头）在整条把手里的上下留白，用来判断"居中"而不是"贴顶"
+    const kids = [...r.children].map(c => c.getBoundingClientRect());
+    const top = Math.min(...kids.map(k => k.top));
+    const bottom = Math.max(...kids.map(k => k.bottom));
     return {
       exists: true,
       w: Math.round(rect.width), h: Math.round(rect.height),
       left: Math.round(rect.left), top: Math.round(rect.top),
-      writingMode: getComputedStyle(r).writingMode,
+      writingMode: getComputedStyle(label).writingMode,
+      upperGap: Math.round(top - rect.top),
+      lowerGap: Math.round(rect.bottom - bottom),
       cols,
       mainW: Math.round(main.getBoundingClientRect().width),
     };
@@ -189,6 +199,9 @@ const checks = [
   ['收起后内容整块隐藏（可见子元素 0）', collapsedInfo.visibleChildren === 0],
   ['桌面三栏布局下第 3 列收成 40px', Array.isArray(handle.cols) && handle.cols[2] === 40],
   ['代码区把手出现', handle.exists === true],
+  ['桌面下把手文字竖排', handle.writingMode === 'vertical-rl'],
+  // 内容要居中，不是顶在 850px 竖栏的最上面（用户反馈过"不在中间"）
+  ['把手内容上下居中', handle.exists === true && Math.abs(handle.upperGap - handle.lowerGap) <= 2],
 ];
 for (const [name, pass] of checks) console.log(`  ${pass ? 'PASS' : 'FAIL'}  ${name}`);
 if (errs.length) console.log('  JS 错误:', errs);

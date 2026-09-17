@@ -60,7 +60,9 @@
   <!-- 左：题目列表 -->
   <aside class="panel list-panel" id="listPanel">
     <div class="panel-head">
-      <button class="ghost icon collapse-btn" id="collapseList" title="收起题目列表">‹</button>
+      <button class="ghost icon collapse-btn" id="collapseList" title="收起题目列表" aria-label="收起题目列表">
+        <svg class="chev to-left" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
       <input id="searchInput" type="search" placeholder="搜索题目">
       <select id="filterSel" title="只看某种状态的题">
         <option value="">全部状态</option>
@@ -79,7 +81,10 @@
   </aside>
 
   <!-- 左栏收起后的展开把手 -->
-  <button class="panel-reopen" id="reopenList" hidden title="展开题目列表">题目列表 ›</button>
+  <button class="panel-reopen" id="reopenList" hidden title="展开题目列表">
+    <span class="reopen-label">题目列表</span>
+    <svg class="chev to-right" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+  </button>
 
   <!-- 中：题面 -->
   <section class="panel desc-panel" id="descPanel">
@@ -92,7 +97,9 @@
         <div class="head-actions">
           <a id="lcLink" class="ghost" target="_blank" rel="noreferrer" hidden>去力扣看原题</a>
           <button id="genBtn" class="ghost">准备工作区</button>
-          <button class="ghost icon collapse-btn" id="collapseDesc" title="收起题面">›</button>
+          <button class="ghost icon collapse-btn" id="collapseDesc" title="收起题面" aria-label="收起题面">
+            <svg class="chev to-right" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
         </div>
       </div>
       <div id="problemMeta" class="meta"></div>
@@ -112,7 +119,9 @@
       <div class="head-actions">
         <button id="saveBtn" class="ghost" title="Ctrl+S">保存</button>
         <button id="runBtn" class="primary" title="Ctrl+Enter">运行</button>
-        <button class="ghost icon collapse-btn" id="collapseCode" title="收起代码区">»</button>
+        <button class="ghost icon collapse-btn" id="collapseCode" title="收起代码区" aria-label="收起代码区">
+          <svg class="chev to-right" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
       </div>
     </div>
     <textarea id="editor" spellcheck="false" placeholder="还没有代码。抽一道题后点「准备工作区」，会自动生成 Solution.java 等文件。"></textarea>
@@ -145,7 +154,7 @@
     <div class="modal-body">
       <section class="plans-section" id="myPlansSection">
         <h4 class="sec-toggle" id="myPlansToggle" title="点击收起 / 展开这一节">
-          <span class="caret">▾</span>我加入的计划 <span class="muted small" id="myPlansHint"></span>
+          <span class="caret"><svg class="chev to-down" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>我加入的计划 <span class="muted small" id="myPlansHint"></span>
         </h4>
         <div id="myPlansList" class="plan-grid"></div>
       </section>
@@ -153,7 +162,7 @@
       <section class="plans-section" id="allPlansSection">
         <div class="section-head">
           <h4 class="sec-toggle" id="allPlansToggle" title="点击收起 / 展开这一节">
-            <span class="caret">▾</span>全部计划 <span class="muted small">（免登录可用，点「同步」拉进本地）</span>
+            <span class="caret"><svg class="chev to-down" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>全部计划 <span class="muted small">（免登录可用，点「同步」拉进本地）</span>
           </h4>
           <input id="planSearch" type="search" placeholder="筛选计划">
         </div>

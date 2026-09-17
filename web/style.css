@@ -163,6 +163,37 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 input[type='number'] { width: 64px; }
 select { cursor: pointer; }
 
+/* ---------------- 折叠 / 展开箭头 ----------------
+ *
+ * 全站只有这一枚箭头，方向靠旋转表达。之前用的是文字字形 ‹ › » ▾ ▸，三个毛病：
+ *
+ *   1. **不居中**。这些字形的盒子远大于实际笔画（实测 15px 字号下盒子
+ *      24.8×27px，ink 只占中间一小条），`align-items:center` 只能把盒子居中，
+ *      眼睛看到的笔画仍然是偏的 —— 这就是"看着不在中间"。
+ *   2. **两态形状不一致**。▾ 和 ▸ 是两个不同字形，切换时形状会跳，
+ *      不是"同一个箭头转了一下"。
+ *   3. 字宽随字体/回退字体变（本机这几个字形回退到了中文字体），换台机器不一样。
+ *
+ * 换成固定尺寸的对称图形后：光学中心 == 几何中心，
+ * 展开/收起永远是同一个形状，只是 transform 不同。
+ */
+.chev {
+  display: block; /* inline 会带上基线缝隙，居中会算不准 */
+  width: var(--chev-size, 14px);
+  height: var(--chev-size, 14px);
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform .18s ease;
+}
+/* 基础形状指向下方（path 画的就是朝下的 v） */
+.chev.to-down { transform: rotate(0deg); }
+.chev.to-right { transform: rotate(-90deg); }
+.chev.to-left { transform: rotate(90deg); }
+
 /* 顶栏里的按钮更紧凑一点 */
 .topbar button { padding: 5px 12px; }
 
@@ -246,6 +277,126 @@ button.ok:hover {
   font-size: 13px;
 }
 
+/* ---------------- 自定义下拉 ----------------
+ *
+ * 原生 <select> 收起时的样子浏览器听 CSS 的，但**展开后的列表是操作系统画的**
+ * （Windows 上是白底 + 系统蓝高亮，Mac 上是系统菜单），CSS 一行都碰不到。
+ * 和页面主题完全脱节 —— 用户说的"点开以后很突兀"就是它。
+ *
+ * 所以只替换弹层。原生 select 留在 DOM 里当唯一数据源（只是藏起来），
+ * 见 app.js 的 enhanceSelect()；这样 .value / .onchange() / option 列表
+ * 这些既有用法和验收脚本全都不用改。
+ *
+ * 结构：
+ *   .dd > select(藏起来) + button.dd-trigger
+ *   body > .dd-pop        ← fixed 定位，挂在 body 上，
+ *                           免得被面板/操作条的 overflow 裁掉
+ */
+.dd {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+}
+.action-step .dd { min-width: 142px; }
+
+/* 原生 select 只保留语义与 options，不参与渲染。
+   不能用 display:none —— 那会连 .value 一起变得不可靠，
+   而且读屏软件也拿不到了。这里用"视觉隐藏"的标准写法。 */
+.dd > select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dd-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 10px;
+  text-align: left;
+}
+.dd-trigger .dd-label {
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dd-trigger .chev { color: var(--text-dim); }
+.dd-trigger.open { border-color: var(--accent); }
+/* 展开时箭头翻过来朝上，和"弹层打开了"对应 */
+.dd-trigger.open .chev { transform: rotate(180deg); }
+
+/*
+ * 弹层。背景用 --bg-panel、高亮用 --bg-elev —— 这个组合在深浅两套主题下
+ * 都是"高亮比底色亮一档"，反过来用 --bg-sunken 的话浅色主题里会变成高亮更暗，
+ * 和深色主题手感不一致。
+ */
+.dd-pop {
+  position: fixed;
+  z-index: 60;
+  min-width: 120px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 5px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+.dd-group {
+  padding: 7px 8px 4px;
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: .3px;
+}
+.dd-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+.dd-item:hover,
+.dd-item.hl { background: var(--bg-elev); }
+.dd-item.on { color: var(--accent); font-weight: 500; }
+.dd-tick {
+  width: 13px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.tick {
+  display: block;
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dd-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 左栏标题栏里的内容都不该被压缩，否则下拉会被挤成一条 */
+.list-panel .panel-head .dd { flex-shrink: 0; }
+
 /* ---------------- 布局 ---------------- */
 /*
  * 层次感的来源：页面底(--bg 灰) → 面板(--bg-panel 白 + 投影) → 面板内凹槽(--bg-sunken)。
@@ -308,15 +459,26 @@ main {
 .small { font-size: 12px; }
 
 /* ---------------- 折叠 ---------------- */
-.collapse-btn {
-  padding: 2px 7px;
-  font-size: 15px;
-  line-height: 1;
+/*
+ * 正方形 + grid 居中 = 真·居中。
+ *
+ * 选择器写成 button.ghost.icon.collapse-btn 是有意的：上面有
+ * `button.ghost.icon { padding: 5px 9px }`，特异性 (0,2,1) 压过单纯的
+ * `.collapse-btn` (0,1,0)，padding 会漏过来把按钮撑成长方形、箭头又偏了。
+ * 多写两个 class 是 (0,3,1)，稳赢。别"优化"掉。
+ */
+button.ghost.icon.collapse-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: grid;
+  place-items: center;
   color: var(--text-dim);
   border-color: transparent;
   flex-shrink: 0;
 }
-.collapse-btn:hover { color: var(--text); border-color: var(--border-strong); }
+button.ghost.icon.collapse-btn:hover { color: var(--text); border-color: var(--border-strong); }
+button.ghost.icon.collapse-btn:hover .chev { stroke-width: 3; }
 
 /* 左栏收起 / 中栏收起的状态 */
 /*
@@ -338,9 +500,22 @@ main.desc-collapsed #descPanel { display: none; }
 main.list-collapsed #listPanel { display: none; }
 main.code-collapsed .code-panel { display: none; }
 
-/* 收起后留下的展开把手，竖排显示 */
+/*
+ * 收起后留下的展开把手，竖排显示。
+ *
+ * 布局用 flex + justify-content:center 把「文字 + 箭头」作为一组**居中**。
+ * 之前是按钮自己带 writing-mode: vertical-rl + padding 顶头，文字贴着顶部，
+ * 850px 高的一条竖栏里内容挤在最上面 —— 用户说的"不在中间"就是这个。
+ *
+ * writing-mode 挪到内层 .reopen-label 上，按钮本身保持正常书写方向，
+ * 这样 flex 的主轴才是竖直的，"居中"才是视觉上的上下居中。
+ */
 .panel-reopen {
-  writing-mode: vertical-rl;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 14px 5px;
   font-size: 12px;
   color: var(--text-dim);
@@ -361,6 +536,7 @@ main.code-collapsed .code-panel { display: none; }
   transition: color .12s, border-color .12s;
 }
 .panel-reopen:hover { color: var(--accent); border-color: var(--accent); }
+.panel-reopen .reopen-label { writing-mode: vertical-rl; }
 
 /*
  * 把手必须显式定位，不能靠 grid 自动放置。
@@ -841,12 +1017,17 @@ button.small-btn { padding: 5px 12px; font-size: 12px; }
   padding: 5px 0;
 }
 .sec-toggle:hover { color: var(--accent); }
+/* 箭头也是一样：固定方框 + grid 居中，不要靠字形自己"看着差不多" */
 .sec-toggle .caret {
-  font-size: 11px;
+  --chev-size: 13px;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
   color: var(--text-faint);
-  width: 12px;
   flex-shrink: 0;
 }
+.sec-toggle:hover .caret { color: var(--accent); }
 
 .plan-grid {
   display: grid;
@@ -973,9 +1154,12 @@ button.small-btn { padding: 5px 12px; font-size: 12px; }
   color: var(--text);
 }
 .plan-group-title .caret {
-  font-size: 10px;
+  --chev-size: 12px;
+  width: 13px;
+  height: 13px;
+  display: grid;
+  place-items: center;
   color: var(--text-faint);
-  width: 10px;
   flex-shrink: 0;
 }
 .plan-group-title .gt-name { flex: 1; min-width: 0; }
@@ -1212,13 +1396,20 @@ button.big {
    */
   main.code-collapsed { grid-template-rows: 1fr 40px; }
   main.code-collapsed .code-panel { display: none; }
+  /*
+   * 横排：flex 主轴要跟着转成水平，否则 justify-content:center 会把
+   * 内容放到中间（竖排时是"上下居中"，横排时就变成"左右居中"了），
+   * 这条例里读起来是从左边开始的，居中反而怪。
+   */
   main.code-collapsed #reopenCode {
-    display: block !important;
+    display: flex !important;
+    flex-direction: row;
     grid-column: 1 / -1;
     grid-row: 2;
-    writing-mode: horizontal-tb;
     padding: 4px 12px;
     text-align: left;
     align-self: stretch;
+    justify-content: flex-start;
   }
+  main.code-collapsed #reopenCode .reopen-label { writing-mode: horizontal-tb; }
 }

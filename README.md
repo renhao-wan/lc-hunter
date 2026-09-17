@@ -66,6 +66,37 @@ lc ui --no-open        # 不自动开浏览器
 - 底部有 0–5 的复习打分按钮，直接写 SM-2 排期
 - 绑定卡码网的题会显示 L1 标记和权威输入/输出描述，可一键解绑
 
+#### 两条界面约定（都是有原因的，别改回去）
+
+**下拉框是自绘的，不是原生 `<select>` 的弹层。**
+
+原生 `<select>` 收起时的样式浏览器听 CSS 的，但**展开后的那个列表是操作系统画的**
+（Windows 上是白底 + 系统蓝高亮），CSS 一行都碰不到，和页面主题完全脱节。
+所以 `web/app.js` 的 `enhanceSelect()` 把它换成了自绘弹层。
+
+原生 select 仍然留在 DOM 里当**唯一数据源**，只是视觉隐藏 —— 这样
+`.value` / `.onchange()` / `dispatchEvent(new Event('change'))` / `option` 列表
+这些既有用法（以及所有验收脚本）一行都不用改。要保持这个结构的话，
+三条同步路径都不能断：
+
+1. 用户点选项 → 自己写 `select.value` 再派发 `change`
+2. JS 重建 `<option>` → `MutationObserver` 盯 `childList`
+   （`renderPlanSelect()` 每次 `innerHTML` 全量重建，还带 `<optgroup>`）
+3. JS 直接赋 `.value` → 劫持该元素的 `value` 存取器
+   （程序化赋值**不触发任何事件**，只监听 `change` 会漏）
+
+**折叠箭头是同一枚 SVG，方向靠旋转。**
+
+以前用的是文字字形 `‹ › » ▾ ▸`，三个毛病：字形盒子远大于实际笔画
+（15px 字号下盒子 24.8×27px），`align-items:center` 只能把盒子居中，
+**眼睛看到的笔画仍然是偏的**；`▾` 和 `▸` 是两个不同字形，展开/收起切换时形状会跳；
+字宽还随回退字体变。
+
+现在全站共用 `.chev` 一枚箭头，展开/收起是同一个形状的旋转，光学中心 == 几何中心。
+折叠按钮用正方形 + `place-items:center` 保证真居中；
+展开把手的内容用 `justify-content:center` 在整条竖栏里居中
+（以前贴着顶部，850px 高的竖栏里内容挤在最上面）。
+
 ### 为什么是本地 Web 而不是 Electron
 
 项目原则是**零 npm 依赖**（数据库用 `node:sqlite`，HTTP 用 `node:http`）。Electron 要拉 ~150MB 二进制，

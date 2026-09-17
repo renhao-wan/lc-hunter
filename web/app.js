@@ -46,6 +46,235 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+/*
+ * ---------------- 折叠箭头 ----------------
+ *
+ * 全站共用这一枚箭头（CSS 里 .chev 有说明为什么不用 ‹ › ▾ ▸ 字形）。
+ * 方向只靠 class 切换旋转，形状不变 —— 展开和收起之间不会"换个字形"。
+ */
+function chevSvg(dir = 'down') {
+  return `<svg class="chev to-${dir}" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`;
+}
+
+/** 下拉里"当前选中"的对勾。用勾而不是箭头 —— 箭头是折叠语义，会被误读 */
+function tickSvg() {
+  return `<svg class="tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5l5.5 5.5L20 7"/></svg>`;
+}
+
+/** 把某处的箭头设成「展开（朝下）」或「收起（朝右）」 */
+function setChev(host, collapsed) {
+  const svg = host && host.querySelector('.chev');
+  if (!svg) return;
+  svg.classList.toggle('to-right', !!collapsed);
+  svg.classList.toggle('to-down', !collapsed);
+}
+
+/* ---------------- 自定义下拉 ----------------
+ *
+ * 为什么要自己画弹层：原生 <select> 展开后的列表由**操作系统**渲染
+ * （Windows 上是白底 + 系统蓝高亮），CSS 完全碰不到，跟页面主题脱节，
+ * 就是用户说的"点开以后很突兀"。控件本身浏览器是听 CSS 的，所以只需换弹层。
+ *
+ * 手法上**保留原生 select 作为唯一数据源**，只是视觉隐藏：
+ * app.js 里有一堆 .value / .onchange() / dispatchEvent(new Event('change'))
+ * / selectedOptions 的用法，验收脚本也在直接读 #xxxSel 的 option。
+ * 重写成一个自绘组件会把这些一次性打散，而留着 select 一行都不用改。
+ *
+ * 三条同步路径必须全部接上，少一条就会出现「点了没反应」或者「文案不更新」：
+ *
+ *   1. 用户点了选项      → 我们自己写 select.value，再派发 change
+ *   2. JS 重建 <option>  → MutationObserver 盯 childList
+ *                          （renderPlanSelect 每次都用 innerHTML 重建，
+ *                            还带 <optgroup>，所以要连分组一起渲染）
+ *   3. JS 直接赋 .value  → 劫持这个元素的 value 存取器
+ *                          （程序化赋值不触发任何事件，光靠监听 change 会漏）
+ */
+function enhanceSelect(sel) {
+  if (!sel || sel.dataset.ddReady) return;
+  sel.dataset.ddReady = '1';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'dd';
+  sel.parentNode.insertBefore(wrap, sel);
+  wrap.appendChild(sel);
+  sel.tabIndex = -1;
+
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'dd-trigger';
+  trigger.setAttribute('aria-haspopup', 'listbox');
+  trigger.setAttribute('aria-expanded', 'false');
+  trigger.innerHTML = `<span class="dd-label"></span>${chevSvg('down')}`;
+  wrap.appendChild(trigger);
+
+  // 弹层挂到 body 上并 fixed 定位：面板和操作条都有 overflow/裁切，
+  // 留在原地会被剪掉一半
+  const pop = document.createElement('div');
+  pop.className = 'dd-pop';
+  pop.setAttribute('role', 'listbox');
+  pop.hidden = true;
+  document.body.appendChild(pop);
+
+  const label = trigger.querySelector('.dd-label');
+  let open = false;
+  let hl = -1; // 键盘高亮项在 sel.options 里的下标
+
+  /** 按 select 当前的 options 重建弹层内容（含 <optgroup> 分组标题） */
+  function refresh() {
+    const cur = sel.selectedOptions[0];
+    label.textContent = cur ? cur.textContent.trim() : '';
+
+    const opts = [...sel.options];
+    const parts = [];
+    for (const node of sel.children) {
+      if (node.tagName === 'OPTGROUP') {
+        parts.push(`<div class="dd-group">${esc(node.label)}</div>`);
+        for (const o of node.children) parts.push(itemHtml(o, opts.indexOf(o)));
+      } else if (node.tagName === 'OPTION') {
+        parts.push(itemHtml(node, opts.indexOf(node)));
+      }
+    }
+    pop.innerHTML = parts.join('');
+    pop.querySelectorAll('.dd-item').forEach((el) => {
+      el.onclick = () => commit(Number(el.dataset.i));
+    });
+    if (hl < 0 || hl >= opts.length) hl = sel.selectedIndex;
+  }
+
+  function itemHtml(o, i) {
+    const on = o.selected;
+    return (
+      `<div class="dd-item${on ? ' on' : ''}" role="option" data-i="${i}" aria-selected="${on}">` +
+      `<span class="dd-tick">${on ? tickSvg() : ''}</span>` +
+      `<span class="dd-text">${esc(o.textContent.trim())}</span>` +
+      `</div>`
+    );
+  }
+
+  /** 强制弹出层重新贴合触发器。比触发器宽就左对齐，超出视口就往回收 */
+  function place() {
+    const r = trigger.getBoundingClientRect();
+    pop.style.visibility = 'hidden';
+    pop.hidden = false;
+    pop.style.minWidth = Math.round(r.width) + 'px';
+    const pw = pop.offsetWidth;
+    const ph = pop.offsetHeight;
+
+    let left = r.left;
+    if (left + pw > innerWidth - 8) left = Math.max(8, innerWidth - 8 - pw);
+    // 下面放不下就翻到上面
+    let top = r.bottom + 4;
+    if (top + ph > innerHeight - 8) top = Math.max(8, r.top - 4 - ph);
+
+    pop.style.left = Math.round(left) + 'px';
+    pop.style.top = Math.round(top) + 'px';
+    pop.style.visibility = '';
+  }
+
+  function markHl() {
+    pop.querySelectorAll('.dd-item').forEach((el) => {
+      el.classList.toggle('hl', Number(el.dataset.i) === hl);
+    });
+    pop.querySelector('.dd-item.hl')?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function openPop() {
+    if (open) return;
+    open = true;
+    hl = sel.selectedIndex;
+    refresh();
+    place();
+    markHl();
+    trigger.classList.add('open');
+    trigger.setAttribute('aria-expanded', 'true');
+  }
+
+  function closePop() {
+    if (!open) return;
+    open = false;
+    pop.hidden = true;
+    trigger.classList.remove('open');
+    trigger.setAttribute('aria-expanded', 'false');
+  }
+
+  /** 选中第 i 项：先写 select，再派发 change，让既有的 onchange 逻辑照常跑 */
+  function commit(i) {
+    const o = sel.options[i];
+    if (!o) return;
+    const changed = sel.value !== o.value;
+    sel.value = o.value;
+    refresh();
+    closePop();
+    trigger.focus();
+    // 值没变就不派发：避免"点了一下当前项"也触发一次全量刷新
+    if (changed) sel.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  trigger.onclick = (e) => {
+    e.stopPropagation();
+    open ? closePop() : openPop();
+  };
+  trigger.onkeydown = (e) => {
+    const n = sel.options.length;
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openPop();
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      hl = Math.min(n - 1, hl + 1);
+      markHl();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      hl = Math.max(0, hl - 1);
+      markHl();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      hl = 0;
+      markHl();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      hl = n - 1;
+      markHl();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      commit(hl);
+    } else if (e.key === 'Escape' || e.key === 'Tab') {
+      closePop();
+    }
+  };
+
+  // 点别处 / 改变窗口 / 滚动就收起，避免弹层留在原地不对齐。
+  //
+  // 滚动要排除弹层自己 —— max-height 320px 的长列表（比如计划下拉）需要能滚，
+  // 不加这个判断的话，滚一下就把弹层关掉了。
+  document.addEventListener('click', closePop);
+  addEventListener('resize', closePop);
+  addEventListener('scroll', (e) => { if (!pop.contains(e.target)) closePop(); }, true);
+  pop.onclick = (e) => e.stopPropagation();
+
+  // 路径 2：JS 重建 options
+  new MutationObserver(refresh).observe(sel, { childList: true, subtree: true });
+
+  // 路径 3：JS 直接赋 value（不触发事件，只能劫持存取器）
+  const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  Object.defineProperty(sel, 'value', {
+    configurable: true,
+    get() {
+      return desc.get.call(sel);
+    },
+    set(v) {
+      desc.set.call(sel, v);
+      refresh();
+    },
+  });
+
+  refresh();
+}
+
 const DIFF_CN = { Easy: '简单', Medium: '中等', Hard: '困难' };
 // 状态词都用大白话。「AC」「未AC」是刷题圈的黑话，第一次用的人看不懂。
 // 后端算好的是 ac / notac / new 三种（见 src/db.js 的 effectiveStatus）。
@@ -789,13 +1018,11 @@ function renderPlansModal(r) {
   // 恢复「我加入的计划」/「全部计划」两节的收起状态
   const hideMine = localStorage.getItem('lc-hide-myplans') === '1';
   $('myPlansList').hidden = hideMine;
-  const caret = $('myPlansToggle').querySelector('.caret');
-  if (caret) caret.textContent = hideMine ? '▸' : '▾';
+  setChev($('myPlansToggle'), hideMine);
 
   const hideAll = localStorage.getItem('lc-hide-allplans') === '1';
   $('allPlansList').hidden = hideAll;
-  const caretAll = $('allPlansToggle').querySelector('.caret');
-  if (caretAll) caretAll.textContent = hideAll ? '▸' : '▾';
+  setChev($('allPlansToggle'), hideAll);
 }
 
 function renderAllPlans(plans, keyword = '') {
@@ -836,7 +1063,7 @@ function renderAllPlans(plans, keyword = '') {
     const isCollapsed = collapsed.has(g);
     parts.push(
       `<div class="plan-group-title group-toggle ${isCollapsed ? 'collapsed' : ''}" data-group="${esc(g)}">` +
-        `<span class="caret">${isCollapsed ? '▸' : '▾'}</span>` +
+        `<span class="caret">${chevSvg(isCollapsed ? 'right' : 'down')}</span>` +
         `<span class="gt-name">${esc(g)}</span>` +
         `<span class="gt-count">${items.length}</span>` +
         `</div>`,
@@ -1207,19 +1434,17 @@ $('planSearch').oninput = () => {
 // 「我加入的计划」整节可收起
 $('myPlansToggle').onclick = () => {
   const box = $('myPlansList');
-  const caret = $('myPlansToggle').querySelector('.caret');
   const hide = !box.hidden;
   box.hidden = hide;
-  caret.textContent = hide ? '▸' : '▾';
+  setChev($('myPlansToggle'), hide);
   localStorage.setItem('lc-hide-myplans', hide ? '1' : '0');
 };
 // 「全部计划」整节也可收起（计划有几十个，滚动很长）
 $('allPlansToggle').onclick = () => {
   const box = $('allPlansList');
-  const caret = $('allPlansToggle').querySelector('.caret');
   const hide = !box.hidden;
   box.hidden = hide;
-  caret.textContent = hide ? '▸' : '▾';
+  setChev($('allPlansToggle'), hide);
   localStorage.setItem('lc-hide-allplans', hide ? '1' : '0');
 };
 // 计划卡片上的按钮用事件委托 —— 卡片是动态渲染的，逐个绑定会在重渲染后失效
@@ -1234,6 +1459,10 @@ $('plansModal').addEventListener('click', (e) => {
     usePlanAsScope(browse.dataset.slug, browse.dataset.name);
   }
 });
+
+// 三个下拉都换成自绘弹层。原生 select 留在原地当数据源（见 enhanceSelect 注释）
+// 必须在下面挂 onchange 之前调用：enhanceSelect 会改动 DOM，先做完再接线
+['planSel', 'modeSel', 'filterSel'].forEach((id) => enhanceSelect($(id)));
 
 $('planSel').onchange = () => {
   loadProblems();
@@ -1285,7 +1514,9 @@ function applyCollapse() {
     reopenDesc.id = 'reopenDesc';
     reopenDesc.className = 'panel-reopen';
     reopenDesc.title = '展开题面';
-    reopenDesc.textContent = '题面 ›';
+    // 文字与箭头分开两个元素：writing-mode: vertical-rl 挪到 .reopen-label 上，
+    // 按钮本身是 flex 列，靠 justify-content:center 让这一组在整条竖栏里居中
+    reopenDesc.innerHTML = `<span class="reopen-label">题面</span>${chevSvg('right')}`;
     reopenDesc.onclick = () => {
       localStorage.setItem('lc-collapse-desc', '0');
       applyCollapse();
@@ -1310,7 +1541,7 @@ function applyCollapse() {
     reopenCode.id = 'reopenCode';
     reopenCode.className = 'panel-reopen';
     reopenCode.title = '展开代码区';
-    reopenCode.textContent = '代码 ›';
+    reopenCode.innerHTML = `<span class="reopen-label">代码</span>${chevSvg('right')}`;
     reopenCode.onclick = () => {
       localStorage.setItem('lc-collapse-code', '0');
       localStorage.setItem('lc-code-lock', '1');
