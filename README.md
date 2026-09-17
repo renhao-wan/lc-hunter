@@ -206,6 +206,36 @@ bin/lc.js             启动器（屏蔽 SQLite 实验警告）
 2. 在 `src/lang/index.js` 的 `BUILTIN` 里加一行 `cpp: () => import('./cpp/profile.js')`
 3. 完了 —— 抽题、复习、CLI 都不用动
 
+### 「做过了」只有一个口径
+
+一道题做没做过，有**两个来源**，缺一不可：
+
+| 来源 | 字段 | 什么时候有值 |
+| --- | --- | --- |
+| 从力扣同步 | `progress.lc_status`（`ac` / `notac`） | 登录后 `lc sync` 才拉得到 |
+| 本工具里跑出来的 | `progress.local_ac_count` / `local_run_count` | 每次 `lc run` 累加 |
+
+只看第一个会出大事：**本地跑通 10 次的题，`lc_status` 可能还是 NULL**（没同步过），
+于是「已通过」筛不出来、「还没做过的」又把做过的题推回给你。
+
+所以 `src/db.js` 顶部立了唯一口径，三个分类互斥且穷尽：
+
+- `ac`（已通过）= 力扣标了 ac，**或**本地跑通过至少一次
+- `new`（没做过）= 两个来源都没有任何记录
+- `notac`（做过没过）= 剩下的情况
+
+对应两份实现，口径必须保持一致：JS 的 `effectiveStatus(row)` 和 SQL 的
+`SQL_IS_AC` / `SQL_IS_NEW` / `SQL_IS_NOTAC`。**新增查询请直接复用这两者，不要另写判断。**
+
+两个已经踩过的坑：
+
+1. **SQL 的 `NOT` 碰上 NULL 会静默丢行** —— `NULL = 'ac'` 得 NULL，`NOT NULL` 还是 NULL。
+   所以三个谓词都包了 `COALESCE`，保证结果是严格的 TRUE/FALSE。
+2. **`SELECT` 必须带上判定所需的列** —— `progress` 要 JOIN，且要选出
+   `local_ac_count, local_run_count`，否则 `effectiveStatus` 拿到 `undefined` 恒判 `new`。
+   `db.getProblem()` 就栽在这里过：列表接口有 JOIN 状态正确，详情接口没有 JOIN，
+   同一道题一个显示「已通过」一个显示「没做过」。回归见 `test/_verify-detail-status.js`。
+
 ### 两个关键数据源
 
 - **力扣**：没有官方 API，用站点自用的 GraphQL（`https://leetcode.cn/graphql/`）。
@@ -225,6 +255,8 @@ bin/lc.js             启动器（屏蔽 SQLite 实验警告）
 - 用例比对对数值有 1e-6 容差；空串和 `null` 不参与数值比较
 - 每个用例跑一次 JVM，约 300-500ms（javac 只编译一次，已经省了大头）
 - 卡码网映射表目前只有 5 条人工绑定，其余题目走 metaData 自动生成
+- 工作区 `.meta.json` 里记录 ACM 等级的键名从 `level` 改成了 `acmLevel`。
+  界面两个键都读，所以升级前生成的老工作区不用重建也能看到等级标记
 
 ---
 

@@ -145,8 +145,35 @@ export function upsertProblem(p) {
   );
 }
 
+/*
+ * 单题查询。
+ *
+ * 必须 JOIN progress —— 这里曾经是 `SELECT * FROM problems`，而 problems 表里
+ * 根本没有 lc_status / local_ac_count / local_run_count，于是调用方拿到的行
+ * 三个字段全是 undefined，effectiveStatus() 恒判 'new'。
+ *
+ * 后果很隐蔽：左栏列表走 getBrowseRows（有 JOIN，状态是对的），点开同一道题
+ * 的详情面板却永远显示「没做过」。实测 two-sum 本地 AC 十几次，列表标「已通过」，
+ * 详情写「没做过」，看起来像随机 bug。
+ *
+ * 回归用例：test/_verify-detail-status.js
+ *
+ * reviews 一起 JOIN，是因为 rowToProblem 会读 row.due_date。
+ */
 export function getProblem(slug) {
-  return getDb().prepare('SELECT * FROM problems WHERE slug = ?').get(slug) || null;
+  return (
+    getDb()
+      .prepare(
+        `SELECT pr.*,
+                pg.lc_status, ${PROGRESS_STATUS_COLS}, pg.last_drawn_at, pg.draw_count,
+                rv.due_date, rv.repetitions, rv.easiness
+           FROM problems pr
+           LEFT JOIN progress pg ON pg.slug = pr.slug
+           LEFT JOIN reviews  rv ON rv.slug = pr.slug
+          WHERE pr.slug = ?`,
+      )
+      .get(slug) || null
+  );
 }
 
 /*

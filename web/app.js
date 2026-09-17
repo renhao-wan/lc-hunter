@@ -402,12 +402,16 @@ async function openProblem(slug, el) {
     state.current.dir = r.dir;
 
     const p = r.problem;
+    // .meta.json 的等级键名换过：早期版本写 level，现在写 acmLevel。
+    // 只认新键名的话，升级前生成的工作区会静默丢掉这个标记 ——
+    // 明明有 Main.java + LeetCodeIO.java，界面上却看不出它是 ACM 几级。
+    const acmLevel = r.meta?.acmLevel || r.meta?.level || null;
     $('problemTitle').textContent = `${p.frontendId ? p.frontendId + '. ' : ''}${p.title}`;
     $('problemMeta').innerHTML = [
       `<span class="diff ${esc(p.difficulty || '')}">${DIFF_CN[p.difficulty] || p.difficulty || '-'}</span>`,
       p.status ? STATUS_CN[p.status] || p.status : '没做过',
       esc((p.tags || []).slice(0, 6).join('、')),
-      r.meta?.acmLevel ? `ACM ${esc(r.meta.acmLevel)}` : '',
+      acmLevel ? `ACM ${esc(acmLevel)}` : '',
       r.review?.dueDate ? `下次复习 ${esc(r.review.dueDate)}（第 ${r.review.repetitions} 次）` : '',
       (r.plans || []).length ? `属于：${esc(r.plans.map((x) => x.name || x.slug).join('、'))}` : '',
     ]
