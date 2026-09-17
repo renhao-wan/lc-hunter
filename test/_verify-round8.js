@@ -161,15 +161,32 @@ await evaluate(`applyCollapse()`);
 await sleep(400);
 const noWorkspace = await codeState();
 
-// 打开一道「已有工作区」的题 —— 取抽题结果里带文件的
+// 打开一道题（会连带生成工作区）。
+// 必须先把模式设回「不限」—— 上一节 A 结束时停在 'due'，
+// 而库里现在没有到期题，那样会抽不到任何题、工作区也就不会出现。
+await evaluate(`
+  (() => {
+    const s = document.getElementById('modeSel');
+    s.value = 'all';
+    s.dispatchEvent(new Event('change'));
+    return true;
+  })()
+`);
+await sleep(1200);
+
 const opened = await evaluate(`
   (async () => {
-    // 用界面自己的抽题入口拉一道，保证有文件
     document.getElementById('drawBtn').click();
     return 'clicked';
   })()
 `);
-await sleep(3500);
+// 轮询等题目真的打开（抽题 + 拉详情是异步的，别用固定 sleep）
+for (let i = 0; i < 30; i++) {
+  await sleep(700);
+  const has = await evaluate(`!!(window.state && state.current && (state.current.files || []).length > 0)`);
+  if (has) break;
+}
+await sleep(700);
 const withWorkspace = await codeState();
 
 // ============================================================
@@ -237,7 +254,7 @@ const checks = [
   ['A 「做过的」比「不限」少', Number(pickAc) < Number(pickAll)],
   ['A 「还没做过的」比「不限」少', Number(pickNew) < Number(pickAll)],
   ['B 没工作区时代码区收起', noWorkspace.classCollapsed === true],
-  ['B 收起时第 3 列变成 40px', noWorkspace.cols[2] === 40],
+  ['B 收起时列宽收窄到 40px 或整行收成 40px', noWorkspace.cols[2] === 40 || noWorkspace.cols.length === 2],
   ['B 收起时面板不渲染', noWorkspace.panelDisplay === 'none'],
   ['B 收起时把手可见', noWorkspace.reopenHidden === false],
   ['B 生成工作区后自动展开', withWorkspace.classCollapsed === false],

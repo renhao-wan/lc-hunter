@@ -47,8 +47,9 @@ function esc(s) {
 }
 
 const DIFF_CN = { Easy: '简单', Medium: '中等', Hard: '困难' };
-// 状态词都用大白话。「AC」「未AC」是刷题圈的黑话，第一次用的人看不懂
-const STATUS_CN = { ac: '已通过', notac: '做过没过', not_started: '没做过' };
+// 状态词都用大白话。「AC」「未AC」是刷题圈的黑话，第一次用的人看不懂。
+// 后端算好的是 ac / notac / new 三种（见 src/db.js 的 effectiveStatus）。
+const STATUS_CN = { ac: '已通过', notac: '做过没过', new: '没做过' };
 
 /**
  * 题面渲染。
@@ -373,9 +374,11 @@ function renderList() {
 /** 一行题目。slug 直接写在 DOM 上，多题抽取时才不会指错元素 */
 function probRow(p) {
   const badges = [];
-  if (p.status && p.status !== 'not_started') {
-    const t = STATUS_CN[p.status] || p.status;
-    badges.push(`<span class="badge ${p.status === 'ac' ? 'badge-ok' : ''}">${esc(t)}</span>`);
+  // 只给「已通过 / 做过没过」挂徽章 —— "没做过"是常态，每行都标一遍纯属噪音
+  if (p.status === 'ac' || p.status === 'notac') {
+    badges.push(
+      `<span class="badge ${p.status === 'ac' ? 'badge-ok' : ''}">${esc(STATUS_CN[p.status])}</span>`,
+    );
   }
   if (p.dueDate) badges.push('<span class="badge badge-due">该复习了</span>');
   return `<div class="prob" data-slug="${esc(p.slug)}">
@@ -402,7 +405,7 @@ async function openProblem(slug, el) {
     $('problemTitle').textContent = `${p.frontendId ? p.frontendId + '. ' : ''}${p.title}`;
     $('problemMeta').innerHTML = [
       `<span class="diff ${esc(p.difficulty || '')}">${DIFF_CN[p.difficulty] || p.difficulty || '-'}</span>`,
-      p.status ? STATUS_CN[p.status] || p.status : '未做',
+      p.status ? STATUS_CN[p.status] || p.status : '没做过',
       esc((p.tags || []).slice(0, 6).join('、')),
       r.meta?.acmLevel ? `ACM ${esc(r.meta.acmLevel)}` : '',
       r.review?.dueDate ? `下次复习 ${esc(r.review.dueDate)}（第 ${r.review.repetitions} 次）` : '',

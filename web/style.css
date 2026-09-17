@@ -350,7 +350,14 @@ main.code-collapsed .code-panel { display: none; }
   box-shadow: var(--shadow-card);
   cursor: pointer;
   letter-spacing: 1px;
-  align-self: start;
+  /*
+   * 撑满整行高度，跟旁边的题目区一样高。
+   *
+   * 不能写 align-self: start —— 那样把手只有文字那么高，看着像悬在顶部的
+   * 一小块碎片，跟旁边满高的面板对不齐。拉伸后是一条完整的竖栏，
+   * 顺带整条都可点，不用去瞄那几十像素。
+   */
+  align-self: stretch;
   transition: color .12s, border-color .12s;
 }
 .panel-reopen:hover { color: var(--accent); border-color: var(--accent); }

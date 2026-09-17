@@ -149,6 +149,46 @@ export function getProblem(slug) {
   return getDb().prepare('SELECT * FROM problems WHERE slug = ?').get(slug) || null;
 }
 
+/*
+ * ================== 「做过了」的唯一判定口径 ==================
+ *
+ * 一道题做没做过，有**两个来源**，缺一不可：
+ *
+ *   1. pg.lc_status   —— 从力扣同步来的（要登录才能拉），值是 'ac' / 'notac'
+ *   2. pg.local_ac_count / pg.local_run_count
+ *                     —— 你在这个工具里自己跑出来的记录
+ *
+ * 只认第一个会出大问题：本地跑通 10 次的题，lc_status 可能还是 NULL
+ * （没同步过），于是「已通过」筛不出来、「还没做过的」又把做过的题再推给你。
+ * 实测踩过：two-sum 本地 AC 了 14 次，界面上仍显示「未做」。
+ *
+ * 所以统一成三个互斥且穷尽的分类，全部查询都用下面这几个常量/函数：
+ *   ac    （已通过）  = 力扣标了 ac，或本地跑通过至少一次
+ *   new   （没做过）  = 两个来源都没有任何记录
+ *   notac （做过没过）= 剩下的情况（跑过但没全过，或力扣标了 notac）
+ *
+ * 注意每个谓词都包了 COALESCE，保证结果是严格的 TRUE/FALSE 而不是 NULL ——
+ * 否则 `NOT 谓词` 会算出 NULL，行会被静默丢掉，notac 就永远筛不出来。
+ */
+export const SQL_IS_AC =
+  "(COALESCE(pg.lc_status, '') = 'ac' OR COALESCE(pg.local_ac_count, 0) > 0)";
+export const SQL_IS_NEW =
+  "(COALESCE(pg.lc_status, '') IN ('', 'not_started') AND COALESCE(pg.local_run_count, 0) = 0)";
+export const SQL_IS_NOTAC = `(NOT ${SQL_IS_AC} AND NOT ${SQL_IS_NEW})`;
+
+/** 上面 SQL 的 JS 版本，口径必须与之一致（抽题引擎和接口层用它） */
+export function effectiveStatus(row) {
+  const lc = row.lc_status == null ? '' : String(row.lc_status);
+  const localAc = row.local_ac_count || 0;
+  const localRun = row.local_run_count || 0;
+  if (lc === 'ac' || localAc > 0) return 'ac';
+  if ((lc === '' || lc === 'not_started') && localRun === 0) return 'new';
+  return 'notac';
+}
+
+/** 每个查询都要带上这两列，否则 effectiveStatus 算不出来 */
+const PROGRESS_STATUS_COLS = 'pg.local_ac_count, pg.local_run_count';
+
 /**
  * 关键词搜索。
  * 字段要和 getAllProblemRows 对齐（带 lc_status / due_date），
@@ -161,7 +201,7 @@ export function searchProblems(keyword, limit = 20) {
       `SELECT pr.slug AS slug, NULL AS grp, 0 AS ord,
               pr.frontend_id, pr.title_cn, pr.title_en, pr.difficulty, pr.paid_only,
               pr.meta_data,
-              pg.lc_status, pg.last_drawn_at, pg.draw_count,
+              pg.lc_status, ${PROGRESS_STATUS_COLS}, pg.last_drawn_at, pg.draw_count,
               rv.due_date, rv.repetitions, rv.easiness
        FROM problems pr
        LEFT JOIN progress pg ON pg.slug = pr.slug
@@ -222,7 +262,7 @@ export function getAllProblemRows() {
       `SELECT pr.slug AS slug, NULL AS grp, 0 AS ord,
               pr.frontend_id, pr.title_cn, pr.title_en, pr.difficulty, pr.paid_only,
               pr.meta_data, pr.sample_testcase,
-              pg.lc_status, pg.last_drawn_at, pg.draw_count,
+              pg.lc_status, ${PROGRESS_STATUS_COLS}, pg.last_drawn_at, pg.draw_count,
               rv.due_date, rv.repetitions, rv.easiness
        FROM problems pr
        LEFT JOIN progress pg ON pg.slug = pr.slug
@@ -256,9 +296,13 @@ export function getBrowseRows({ planSlug = null, mode = null, keyword = null, li
     const like = `%${keyword}%`;
     args.push(like, like, like);
   }
-  if (mode === 'ac') where.push("pg.lc_status = 'ac'");
-  else if (mode === 'notac') where.push("pg.lc_status IS NOT NULL AND pg.lc_status <> 'ac'");
-  else if (mode === 'new') where.push("(pg.lc_status IS NULL OR pg.lc_status = 'not_started')");
+  // 状态筛选走统一口径（见文件上方 SQL_IS_AC / SQL_IS_NEW 的说明）——
+  // 只认 lc_status 的话，本地已经跑通的题会被当成"没做过"
+  if (mode === 'ac') where.push(SQL_IS_AC);
+  else if (mode === 'notac') where.push(SQL_IS_NOTAC);
+  else if (mode === 'new') where.push(SQL_IS_NEW);
+  // 「做过的」= 不是没做过的，包含了「已通过」和「做过没过」两种
+  else if (mode === 'done') where.push(`(NOT ${SQL_IS_NEW})`);
   else if (mode === 'due') where.push("rv.due_date IS NOT NULL AND rv.due_date <= date('now')");
 
   // 选定计划的优先级：命中当前 planSlug 的排 0，然后是"我加入的"，最后是其它
@@ -269,7 +313,7 @@ export function getBrowseRows({ planSlug = null, mode = null, keyword = null, li
   const sql = `
     SELECT pr.slug AS slug,
            pr.frontend_id, pr.title_cn, pr.title_en, pr.difficulty, pr.paid_only,
-           pg.lc_status, rv.due_date,
+           pg.lc_status, ${PROGRESS_STATUS_COLS}, rv.due_date,
            (SELECT p.name FROM plan_problems pp
               JOIN plans p ON p.slug = pp.plan_slug
              WHERE pp.problem_slug = pr.slug
@@ -301,8 +345,8 @@ export function planModeCounts() {
     .prepare(
       `SELECT pp.plan_slug AS slug,
               COUNT(*) AS total,
-              SUM(CASE WHEN pg.lc_status = 'ac' THEN 1 ELSE 0 END) AS ac,
-              SUM(CASE WHEN pg.lc_status IS NULL OR pg.lc_status = 'not_started' THEN 1 ELSE 0 END) AS fresh,
+              SUM(CASE WHEN ${SQL_IS_AC} THEN 1 ELSE 0 END) AS ac,
+              SUM(CASE WHEN ${SQL_IS_NEW} THEN 1 ELSE 0 END) AS fresh,
               SUM(CASE WHEN rv.due_date IS NOT NULL AND rv.due_date <= date('now') THEN 1 ELSE 0 END) AS due
        FROM plan_problems pp
        JOIN problems pr ON pr.slug = pp.problem_slug
@@ -317,6 +361,8 @@ export function planModeCounts() {
         all: r.total || 0,
         new: r.fresh || 0,
         ac: r.ac || 0,
+        // 「做过的」= 总数 - 没做过的，不必再查一次
+        done: (r.total || 0) - (r.fresh || 0),
         due: r.due || 0,
       },
     }));
@@ -340,9 +386,9 @@ export function browseCounts({ planSlug = null, keyword = null } = {}) {
   const row = db
     .prepare(
       `SELECT COUNT(*) AS total,
-              SUM(CASE WHEN pg.lc_status = 'ac' THEN 1 ELSE 0 END) AS ac,
-              SUM(CASE WHEN pg.lc_status IS NOT NULL AND pg.lc_status <> 'ac' THEN 1 ELSE 0 END) AS notac,
-              SUM(CASE WHEN pg.lc_status IS NULL OR pg.lc_status = 'not_started' THEN 1 ELSE 0 END) AS fresh,
+              SUM(CASE WHEN ${SQL_IS_AC} THEN 1 ELSE 0 END) AS ac,
+              SUM(CASE WHEN ${SQL_IS_NOTAC} THEN 1 ELSE 0 END) AS notac,
+              SUM(CASE WHEN ${SQL_IS_NEW} THEN 1 ELSE 0 END) AS fresh,
               SUM(CASE WHEN rv.due_date IS NOT NULL AND rv.due_date <= date('now') THEN 1 ELSE 0 END) AS due
        FROM problems pr
        LEFT JOIN progress pg ON pg.slug = pr.slug
@@ -356,6 +402,7 @@ export function browseCounts({ planSlug = null, keyword = null } = {}) {
     ac: row.ac || 0,
     notac: row.notac || 0,
     new: row.fresh || 0,
+    done: (row.ac || 0) + (row.notac || 0),
     due: row.due || 0,
   };
 }
@@ -409,7 +456,7 @@ export function listPlans({ source = null } = {}) {
   const where = source ? 'WHERE p.source = ?' : '';
   const sql = `SELECT p.slug, p.name, p.source, p.question_num,
               COUNT(pp.problem_slug) AS total,
-              SUM(CASE WHEN pg.lc_status = 'ac' THEN 1 ELSE 0 END) AS ac
+              SUM(CASE WHEN ${SQL_IS_AC} THEN 1 ELSE 0 END) AS ac
        FROM plans p
        LEFT JOIN plan_problems pp ON pp.plan_slug = p.slug
        LEFT JOIN progress pg ON pg.slug = pp.problem_slug
@@ -473,7 +520,7 @@ export function getPlanProblems(planSlug) {
       `SELECT pp.problem_slug AS slug, pp.group_name AS grp, pp.ord,
               pr.frontend_id, pr.title_cn, pr.title_en, pr.difficulty, pr.paid_only,
               pr.meta_data, pr.sample_testcase,
-              pg.lc_status, pg.last_drawn_at, pg.draw_count,
+              pg.lc_status, ${PROGRESS_STATUS_COLS}, pg.last_drawn_at, pg.draw_count,
               rv.due_date, rv.repetitions, rv.easiness
        FROM plan_problems pp
        JOIN problems pr ON pr.slug = pp.problem_slug
@@ -581,8 +628,9 @@ export function stats() {
     problems: one('SELECT COUNT(*) AS n FROM problems').n,
     detailed: one('SELECT COUNT(*) AS n FROM problems WHERE detail_fetched = 1').n,
     plans: one('SELECT COUNT(*) AS n FROM plans').n,
-    ac: one("SELECT COUNT(*) AS n FROM progress WHERE lc_status = 'ac'").n,
-    notac: one("SELECT COUNT(*) AS n FROM progress WHERE lc_status = 'notac'").n,
+    // 复用同一套谓词（把表别名写成 pg 即可），避免顶栏的数字和列表筛出来的对不上
+    ac: one(`SELECT COUNT(*) AS n FROM progress pg WHERE ${SQL_IS_AC}`).n,
+    notac: one(`SELECT COUNT(*) AS n FROM progress pg WHERE ${SQL_IS_NOTAC}`).n,
     due: one("SELECT COUNT(*) AS n FROM reviews WHERE due_date IS NOT NULL AND due_date <= date('now')").n,
     attempts: one('SELECT COUNT(*) AS n FROM attempts').n,
   };

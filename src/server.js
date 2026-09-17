@@ -97,8 +97,15 @@ function rowToProblem(row) {
     frontendId: row.frontend_id,
     title: row.title_cn || row.title_en || row.slug,
     difficulty: normDiff(row.difficulty),
-    // 库里存的是小写 ac / notac，UI 统一按小写判断
-    status: row.lc_status ? String(row.lc_status).toLowerCase() : null,
+    /*
+     * 状态用 db.effectiveStatus 算，不要只看 row.lc_status。
+     *
+     * lc_status 是从力扣同步来的（要登录），而 local_ac_count / local_run_count
+     * 是用户在本工具里自己跑出来的。只看前者，本地跑通过的题会显示成「未做」——
+     * 实测 two-sum 本地 AC 了 14 次，界面上还是「未做」，用户会以为筛选坏了。
+     * 这里返回 'ac' / 'notac' / 'new' 三种，UI 按小写判断。
+     */
+    status: db.effectiveStatus(row),
     dueDate: row.due_date || null,
     paidOnly: !!row.paid_only,
     tags: row.tags ? String(row.tags).split(',').filter(Boolean) : [],

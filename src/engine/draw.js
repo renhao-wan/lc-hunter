@@ -47,7 +47,10 @@ export function computeWeight(row, cfg, { now = Date.now(), today = todayStr() }
     reasons.push('困难 ×1.35');
   }
 
-  const status = row.lc_status || null;
+  // 状态一律走 db.effectiveStatus —— 它同时看「力扣同步来的 lc_status」和
+  // 「本地自己跑出来的 local_*_count」。只看前者的话，本地跑通过的题会被当成没做过，
+  // 于是「做过的（复习）」抽不出来、「还没做过的」又把做过的题再推一遍。
+  const status = db.effectiveStatus(row);
   const reps = row.repetitions || 0;
 
   if (status === 'notac') {
@@ -79,8 +82,12 @@ export function computeWeight(row, cfg, { now = Date.now(), today = todayStr() }
 
 const MODE_FILTERS = {
   all: () => true,
-  new: (r) => (r.lc_status || null) !== 'ac',
-  ac: (r) => r.lc_status === 'ac',
+  // 「还没做过的」= 力扣没同步到状态，且本地也从没跑过
+  new: (r) => db.effectiveStatus(r) === 'new',
+  // 「做过的（复习）」：只要做过就算，包括本地跑通过但还没同步到力扣的
+  ac: (r) => db.effectiveStatus(r) === 'ac',
+  // 「做过的」：已通过 + 做过没过，都算
+  done: (r) => db.effectiveStatus(r) !== 'new',
   due: (r, today) => !!r.due_date && r.due_date <= today,
 };
 
@@ -198,8 +205,9 @@ export function drawStats({ cfg, planSlug = null, allowNonJava = false } = {}) {
       continue;
     }
     if (r.paid_only) continue;
-    if (r.lc_status === 'ac') ac++;
-    else if (r.lc_status === 'notac') notac++;
+    const st = db.effectiveStatus(r);
+    if (st === 'ac') ac++;
+    else if (st === 'notac') notac++;
     else fresh++;
     if (r.due_date && r.due_date <= today) due++;
   }

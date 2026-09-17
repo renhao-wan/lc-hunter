@@ -464,7 +464,7 @@ async function cmdPlan({ positional }) {
     const w = draw.computeWeight(r, cfg, { today }).weight;
     log(
       `  ${String(r.frontend_id || '').padStart(4)} ${r.title_cn || r.title_en || r.slug}  ${statusCn(
-        r.lc_status,
+        db.effectiveStatus(r),
       )}  ${diffCn(r.difficulty)}  ${C.dim}w=${w.toFixed(2)}${C.reset}${due}`,
     );
   });
@@ -496,8 +496,8 @@ async function cmdDraw({ flags }) {
   const planSlug = flags.plan ? String(flags.plan) : null;
   const mode = String(flags.mode || 'all');
   const count = Number(flags.n || 1);
-  if (!['all', 'new', 'ac', 'due'].includes(mode)) {
-    err('mode 只能是 all / new / ac / due');
+  if (!['all', 'new', 'done', 'ac', 'due'].includes(mode)) {
+    err('mode 只能是 all / new / done / ac / due');
     return;
   }
 
@@ -1050,7 +1050,8 @@ ${C.bold}学习计划${C.reset}   ← 主线：绑定 → 关联计划 → 抽�
 ${C.bold}日常刷题${C.reset}
   lc draw --plan lcof -n 1      按权重抽 1 题
   lc draw --mode new -n 1       只抽没做过的
-  lc draw --mode ac -n 1        只抽已 AC 的（复习）
+  lc draw --mode done -n 1      只抽做过的（含没通过的）
+  lc draw --mode ac -n 1        只抽已通过的（复习）
   lc draw --mode due -n 1       只抽到期复习的
   lc draw -n 3 --gen            一次抽 3 题并生成工作区
   lc gen two-sum --force        重新生成脚手架（默认保留你的 Solution.java）
@@ -1077,7 +1078,7 @@ ${C.bold}其它${C.reset}
   lc config [key] [value]       查看/修改配置
   lc open [slug]                在文件管理器里打开工作区
 
-${C.bold}抽题模式${C.reset}  --mode all(默认) | new(未AC) | ac(已AC复习) | due(到期)
+${C.bold}抽题模式${C.reset}  --mode all(默认) | new(没做过) | done(做过的) | ac(已通过复习) | due(该复习)
 `);
 }
 

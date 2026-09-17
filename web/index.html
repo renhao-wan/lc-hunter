@@ -29,10 +29,13 @@
 
   <div class="action-step">
     <label>抽什么样的</label>
+    <!-- 选项要和左栏的「全部状态」保持一致：两处指的是同一件事，
+         一边选了另一边跟着变，选项集不一样会让用户以为筛的不是同一批题 -->
     <select id="modeSel" title="决定抽出来的题是新的还是复习的">
       <option value="all">不限</option>
       <option value="new">还没做过的</option>
-      <option value="ac">做过的（复习）</option>
+      <option value="done">做过的</option>
+      <option value="ac">已通过的（复习）</option>
       <option value="due">今天该复习的</option>
     </select>
   </div>
@@ -61,6 +64,7 @@
       <input id="searchInput" type="search" placeholder="搜索题目">
       <select id="filterSel" title="只看某种状态的题">
         <option value="">全部状态</option>
+        <option value="done">做过的</option>
         <option value="ac">已通过</option>
         <option value="notac">做过没过</option>
         <option value="new">没做过</option>
