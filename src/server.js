@@ -577,38 +577,17 @@ const routes = {
     return { ok: true, plans: out, stats: db.stats() };
   },
 
-  'POST /api/bind': async (ctx) => {
-    const { cookie, session, csrf } = ctx.body || {};
-    if (!cookie && !session) throw new HttpError(400, '缺少 cookie');
-    // 界面默认走"两个分开的字段"，整条粘贴是折叠的降级路径 —— 两种都要接住
-    const creds = cookie
-      ? parseCookieInput(String(cookie))
-      : parseCookieInput(csrf ? `LEETCODE_SESSION=${session}; csrftoken=${csrf}` : String(session));
-    cfgm.saveCredentials(creds);
-
-    // 存完立刻验一次。只回"绑定成功"但实际是过期 Cookie，是最容易让人困惑的体验。
-    const cfg = cfgm.ensureDirs();
-    try {
-      const client = sync.makeClient(cfg, creds);
-      const me = await client.userStatus();
-      if (me?.isSignedIn) {
-        return {
-          ok: true,
-          bound: true,
-          signedIn: true,
-          account: toAccount(me),
-        };
-      }
-      return {
-        ok: true,
-        bound: true,
-        signedIn: false,
-        warning: 'Cookie 已保存，但力扣返回未登录。可能是复制不全或已过期 —— 公开题目仍可同步，但拿不到「我加入的计划」和 AC 状态。',
-      };
-    } catch (e) {
-      return { ok: true, bound: true, signedIn: false, warning: `已保存，但验证请求失败：${e.message}` };
-    }
-  },
+  /*
+   * 注意这里没有「粘贴 Cookie 绑定」的端点，是有意为之。
+   *
+   * 绑定的唯一入口是下面的 POST /api/login/browser ——
+   * 弹浏览器让用户正常登录，我们自动把 Cookie 抓回来。
+   * 曾经有过一个 /api/bind 接收用户粘贴的 Cookie，但它带来两个问题：
+   *   1. 把"去开发者工具里找 Cookie"这种开发者操作推给了普通用户
+   *   2. Cookie 容易被复制不全（少了 HttpOnly 的那个）或已过期，
+   *      表现为"提示绑定成功但状态还是未登录"，比直接失败更难排查
+   * 现在没有浏览器时会明确告诉用户去装一个，而不是给一条隐蔽的退路。
+   */
 
   'POST /api/unbind': async () => {
     cfgm.clearCredentials();
@@ -625,13 +604,14 @@ const routes = {
 
     const br = findBrowser();
     if (!br) {
-      // 界面上要能优雅降级到"手动粘贴"，所以这里不是 500，而是带 hint 的正常响应
+      // 没有浏览器就没法自动登录。这里不是 500 —— 缺少浏览器是可预期的环境问题，
+      // 用带 hint 的正常响应让界面能给出可操作的指引。
       return {
         ok: false,
         reason: 'no-browser',
         hint:
-          '没找到 Chrome / Edge / Chromium。可以改用「手动粘贴 Cookie」，' +
-          '或安装一个 Chromium 系浏览器后重试。',
+          '没找到 Chrome / Edge / Chromium。装一个任意的即可，' +
+          '或者在本机 .lc/config.json 里加一行 "browserPath": "你的浏览器路径"。',
       };
     }
 
@@ -696,57 +676,6 @@ const routes = {
 
 /** 一键登录的实时进度（内存态就够了，进程重启即失效） */
 let loginStatus = { running: false, done: false, message: '' };
-
-/**
- * 解析用户粘贴的 Cookie。
- *
- * 关键：输出格式必须和 LeetCodeClient._cookieHeader() 对齐 ——
- * 它读的是 creds.LEETCODE_SESSION 和 creds.csrftoken 两个字段。
- * 之前这里存成 { cookie: '...', csrf: '...' } 会导致 isAuthed 永远 false，
- * 也就是"明明绑了却一直提示未登录"。
- */
-function parseCookieInput(raw) {
-  const s = raw.trim();
-  if (!s) throw new HttpError(400, 'Cookie 为空');
-
-  // 允许直接粘 JSON
-  if (s.startsWith('{')) {
-    try {
-      const j = JSON.parse(s);
-      const out = {};
-      for (const [k, v] of Object.entries(j)) {
-        if (/^LEETCODE_SESSION$/i.test(k)) out.LEETCODE_SESSION = String(v);
-        else if (/^csrftoken$/i.test(k)) out.csrftoken = String(v);
-      }
-      if (!out.LEETCODE_SESSION) throw new HttpError(400, 'JSON 里没有 LEETCODE_SESSION');
-      if (!out.csrftoken) out.csrftoken = '';
-      return out;
-    } catch (e) {
-      if (e instanceof HttpError) throw e;
-      /* 落下去按 cookie 串解析 */
-    }
-  }
-
-  // 整条 Cookie 字符串（最常见）
-  const out = {};
-  for (const part of s.split(';')) {
-    const i = part.indexOf('=');
-    if (i <= 0) continue;
-    const k = part.slice(0, i).trim();
-    const v = part.slice(i + 1).trim();
-    if (/^LEETCODE_SESSION$/i.test(k)) out.LEETCODE_SESSION = v;
-    else if (/^csrftoken$/i.test(k)) out.csrftoken = v;
-  }
-
-  // 只粘了 LEETCODE_SESSION 的值（没有 = 号）
-  if (!out.LEETCODE_SESSION && !s.includes('=')) out.LEETCODE_SESSION = s;
-
-  if (!out.LEETCODE_SESSION) {
-    throw new HttpError(400, '没解析出 LEETCODE_SESSION。请粘贴整条 Cookie，或直接粘贴 LEETCODE_SESSION 的值。');
-  }
-  if (!out.csrftoken) out.csrftoken = '';
-  return out;
-}
 
 /**
  * 把 userStatus 的返回整理成界面要的账号对象。

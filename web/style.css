@@ -1077,63 +1077,6 @@ button.big {
 .bind-result.err { border-color: var(--red); }
 .bind-result b { font-weight: 500; }
 
-.manual {
-  margin-top: 16px;
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-}
-.manual > summary {
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--text-dim);
-  padding: 4px 0;
-}
-.manual > summary:hover { color: var(--text); }
-.manual-body { padding-top: 10px; }
-
-.steps {
-  font-size: 12px;
-  color: var(--text-dim);
-  line-height: 1.9;
-  padding-left: 20px;
-  margin: 0 0 12px;
-}
-.steps b { color: var(--text); }
-.steps code, .field code {
-  font-family: var(--mono);
-  background: var(--bg-input);
-  padding: 1px 5px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  font-size: 11px;
-}
-
-.field { margin-bottom: 10px; }
-.field label {
-  display: block;
-  font-size: 12px;
-  margin-bottom: 4px;
-  color: var(--text-dim);
-}
-.field label .req { color: var(--red); }
-.field input {
-  width: 100%;
-  font-family: var(--mono);
-  font-size: 12px;
-}
-.paste-all { margin: 10px 0; }
-.paste-all > summary {
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.paste-all textarea {
-  width: 100%;
-  font-family: var(--mono);
-  font-size: 12px;
-  margin-top: 6px;
-}
-
 /* 已绑定时的账号卡片 */
 .acct-card {
   display: flex;

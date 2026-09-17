@@ -15,7 +15,7 @@ const cap = await (await fetch(`${BASE}/api/bind/capability`)).json();
 log('1) 能力探测:', JSON.stringify(cap.browser), '已绑定:', cap.bound);
 
 if (!cap.browser?.ok) {
-  log('   ⚠️ 没有可用浏览器，一键登录本就该降级。跳过后续。');
+  log('   ⚠️ 没有可用浏览器，自动登录无法进行（界面会提示去装一个）。跳过后续。');
   process.exit(0);
 }
 

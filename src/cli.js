@@ -3,7 +3,7 @@
  * lc-hunter CLI —— 力扣刷题辅助工具的内核。
  *
  * 典型流程：
- *   lc bind        绑定 Cookie（首次）
+ *   lc bind        绑定力扣账号（弹出浏览器登录，全自动）
  *   lc sync        同步题目目录 / 刷题状态 / 学习计划
  *   lc plans       看看有哪些题单
  *   lc draw --plan xxx -n 1 --gen   抽 1 题并生成工作区
@@ -101,20 +101,6 @@ function ask(question) {
   });
 }
 
-/** 从整条 Cookie 串里抠出需要的两个值 */
-export function parseCookieString(raw) {
-  const out = {};
-  for (const part of String(raw || '').split(';')) {
-    const idx = part.indexOf('=');
-    if (idx < 0) continue;
-    const k = part.slice(0, idx).trim();
-    const v = part.slice(idx + 1).trim();
-    if (/^LEETCODE_SESSION$/i.test(k)) out.LEETCODE_SESSION = v;
-    if (/^csrftoken$/i.test(k)) out.csrftoken = v;
-  }
-  return out;
-}
-
 function requireCreds() {
   const creds = cfgm.loadCredentials();
   if (!creds || !creds.LEETCODE_SESSION) {
@@ -176,12 +162,12 @@ async function cmdDoctor() {
       const client = new LeetCodeClient({ site: cfg.site, creds, intervalMs: cfg.requestIntervalMs });
       const me = await client.userStatus();
       if (me?.isSignedIn) ok(`已登录：${me.username || me.userSlug || '(匿名)'}`);
-      else err('Cookie 已失效（isSignedIn=false），请重新 lc bind');
+      else err('登录已失效，请重新运行：lc bind');
     } catch (e) {
       err(`账号检查失败：${e.message}`);
     }
   } else {
-    warn('未绑定账号（Cookie）。公开题目仍可拉取，但刷题状态/学习计划需要登录。');
+    warn('还没绑定力扣账号。公开题目仍可拉取，但刷题状态和学习计划需要登录。');
   }
 
   const s = db.stats();
@@ -192,77 +178,52 @@ async function cmdDoctor() {
   );
 }
 
+/**
+ * 绑定力扣账号。
+ *
+ * 只有一条路径：打开浏览器让用户正常登录，我们自动抓 Cookie。
+ * 不再支持 `lc bind --session <值>` 这种粘贴方式 —— 让用户去开发者工具里
+ * 翻 Cookie 既劝退又容易出错（漏掉 HttpOnly 的那条、或复制到过期的值），
+ * 而且失败时的表现是"提示成功但状态仍是未登录"，比直接报错更难查。
+ *
+ * 注意这里没有 headless 选项：绑定需要用户在弹出的窗口里扫码或输密码，
+ * 无头模式根本没法完成登录（这正是"自动绑定"和"自动测试"的区别）。
+ */
 async function cmdBind({ flags }) {
   const cfg = cfgm.ensureDirs();
-  let creds = {};
+  const { browserReport, loginAndCapture } = await import('./leetcode/browser.js');
 
-  // 一键登录：弹浏览器让用户登录，自动抓 Cookie。
-  // 这是主路径 —— 用户不需要知道 Cookie 在哪、长什么样。
-  if (flags.browser) {
-    const { browserReport, loginAndCapture } = await import('./leetcode/browser.js');
-    const rep = browserReport();
-    if (!rep.ok) {
-      err(rep.hint);
-      log(C.dim + '  也可以改用：lc bind --session <LEETCODE_SESSION 的值>' + C.reset);
-      return;
-    }
-    log(`将打开 ${rep.name} 让你登录力扣，登录成功后会自动完成绑定。`);
-    let creds2;
-    try {
-      creds2 = await loginAndCapture({
-        site: cfg.site,
-        onStatus: (m) => log(C.dim + '  ' + m + C.reset),
-      });
-    } catch (e) {
-      err(e.message);
-      return;
-    }
-    cfgm.saveCredentials(creds2);
-    const client = new LeetCodeClient({ site: cfg.site, creds: creds2, intervalMs: cfg.requestIntervalMs });
-    try {
-      const me = await client.userStatus();
-      if (me?.isSignedIn) ok(`绑定成功：${me.username || me.userSlug}${me.isPremium ? '（会员）' : ''}`);
-      else warn('Cookie 已保存，但站点返回未登录（可能登录没完成）。');
-    } catch (e) {
-      warn(`已保存，但验证请求失败：${e.message}`);
-    }
+  const rep = browserReport();
+  if (!rep.ok) {
+    err('没找到可用的浏览器');
+    log(C.dim + '  ' + rep.hint + C.reset);
     return;
   }
 
-  if (flags.session) {
-    creds.LEETCODE_SESSION = flags.session;
-    creds.csrftoken = flags.csrf || '';
-  } else {
-    log('请粘贴力扣的 Cookie（登录 leetcode.cn 后，F12 → 应用/存储 → Cookies）。');
-    log(C.dim + '  提示：不想碰 Cookie 的话，用 lc bind --browser 可以一键登录。' + C.reset);
-    log(C.dim + '  可以直接粘贴整条 Cookie 字符串，我会自动提取 LEETCODE_SESSION 和 csrftoken。' + C.reset);
-    log(C.dim + '  也可以只粘贴 LEETCODE_SESSION 的值。' + C.reset);
-    const raw = await ask('Cookie > ');
-    if (!raw) {
-      err('已取消');
-      return;
-    }
-    if (raw.includes('=')) {
-      creds = parseCookieString(raw);
-    } else {
-      creds.LEETCODE_SESSION = raw;
-    }
-    if (!creds.csrftoken) creds.csrftoken = await ask('csrftoken（可留空，部分接口需要）> ');
-  }
+  log(`将打开 ${rep.name}，请在窗口里登录力扣（扫码或账号密码都行）。`);
+  log(C.dim + '  登录成功后会自动完成绑定，然后关掉那个窗口。' + C.reset);
 
-  if (!creds.LEETCODE_SESSION) {
-    err('没拿到 LEETCODE_SESSION');
+  let creds;
+  try {
+    creds = await loginAndCapture({
+      site: cfg.site,
+      onStatus: (m) => log(C.dim + '  ' + m + C.reset),
+    });
+  } catch (e) {
+    err(e.message);
     return;
   }
+
   cfgm.saveCredentials(creds);
 
+  // 存完立刻验一次 —— 只回"绑定成功"但实际没登上，是最容易让人困惑的体验
   const client = new LeetCodeClient({ site: cfg.site, creds, intervalMs: cfg.requestIntervalMs });
   try {
     const me = await client.userStatus();
     if (me?.isSignedIn) ok(`绑定成功：${me.username || me.userSlug}${me.isPremium ? '（会员）' : ''}`);
-    else warn('Cookie 已保存，但站点返回未登录。公开数据可用；题单/刷题状态可能拿不到。');
+    else warn('登录态已保存，但站点返回未登录（可能登录没走完）。重新运行 lc bind 再试一次。');
   } catch (e) {
-    warn(`已保存，但验证请求失败：${e.message}`);
+    warn(`登录态已保存，但验证请求失败：${e.message}`);
   }
 }
 
@@ -272,7 +233,7 @@ async function cmdWhoami() {
   const client = new LeetCodeClient({ site: cfg.site, creds, intervalMs: cfg.requestIntervalMs });
   const me = await client.userStatus();
   if (!me?.isSignedIn) {
-    err('未登录（Cookie 可能过期）');
+    err('未登录，登录态可能已过期，重新运行 lc bind 即可');
     return;
   }
   ok(`${me.username || me.userSlug}${me.realName ? `（${me.realName}）` : ''}${me.isPremium ? ' [会员]' : ''}`);
@@ -300,7 +261,7 @@ async function cmdSync({ flags }) {
     head('同步学习计划');
     const mine = !!flags.mine;
     if (mine && !creds?.LEETCODE_SESSION) {
-      warn('--mine 需要登录 Cookie，先用 lc bind 绑定。这次改同步内置精选清单。');
+      warn('--mine 需要先绑定账号，请运行 lc bind。这次改同步内置精选清单。');
     }
     if (!planArg && !mine) {
       log(
@@ -411,7 +372,7 @@ async function cmdMyPlans() {
 
   const me = await client.userStatus();
   if (!me?.isSignedIn) {
-    err('Cookie 已失效，请重新 lc bind');
+    err('登录已失效，请重新运行：lc bind');
     return;
   }
   head(`${me.username || me.userSlug} 的学习计划`);
@@ -1127,7 +1088,7 @@ const COMMANDS = {
   bind: cmdBind,
   unbind: async () => {
     cfgm.clearCredentials();
-    ok('已清除本地 Cookie');
+    ok('已解绑，本地登录态已清除');
   },
   whoami: cmdWhoami,
   sync: cmdSync,

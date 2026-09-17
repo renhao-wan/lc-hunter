@@ -16,7 +16,7 @@
 lc ui                     # 图形界面（推荐）：浏览器打开 127.0.0.1:5173
 
 lc doctor                 # 环境与账号自检
-lc bind                   # 粘贴力扣 Cookie（LEETCODE_SESSION + csrftoken）
+lc bind                   # 绑定力扣账号：弹出浏览器登录，全自动
 lc sync                   # 同步题目目录 + 学习计划
 lc sync --details 30      # 顺带补 30 题的题面/metaData/样例
 lc plans                  # 看看有哪些题单
@@ -217,8 +217,10 @@ bin/lc.js             启动器（屏蔽 SQLite 实验警告）
 
 ## 已知边界
 
-- Cookie 等同密码，只落在本地 `.lc/credentials.json`，别提交
-- 没绑 Cookie 也能拉公开题目，但刷题状态和学习计划拿不到
+- 登录态等同密码，只落在本地 `.lc/credentials.json`，别提交
+- 没绑账号也能拉公开题目，但刷题状态和学习计划拿不到
+- 绑定需要本机有一个 Chromium 系浏览器（Chrome / Edge / Brave / Chromium）。
+  没装的话在 `.lc/config.json` 里加 `"browserPath": "..."` 指定路径
 - 期望输出是从题面"输入：/输出："里抽的（力扣 API 只给输入不给输出），题面格式特殊的题可能抽不到，会退回只冒烟
 - 用例比对对数值有 1e-6 容差；空串和 `null` 不参与数值比较
 - 每个用例跑一次 JVM，约 300-500ms（javac 只编译一次，已经省了大头）
@@ -232,7 +234,7 @@ bin/lc.js             启动器（屏蔽 SQLite 实验警告）
 
 | 路径 | 是什么 | 为什么排除 |
 | --- | --- | --- |
-| `.lc/credentials.json` | 力扣登录 Cookie（`LEETCODE_SESSION`） | 等同密码，泄露等于交出账号 |
+| `.lc/credentials.json` | 力扣登录态（`LEETCODE_SESSION`） | 等同密码，泄露等于交出账号 |
 | `.lc/lc-hunter.db*` | 本地 SQLite（题目/进度/复习记录） | 个人做题数据，且体积大 |
 | `workspace/` | 抽题生成的工作区 | 含 LeetCode 版权题面、个人解答、平台相关的 `.class` |
 | `test/**_shot*.png` 等 | 界面验收截图与结果 JSON | 每次跑都不一样 |
@@ -240,12 +242,30 @@ bin/lc.js             启动器（屏蔽 SQLite 实验警告）
 `test/` 下的 `_verify-*.js` / `probe-*.js` **会**提交 —— 那是可复用的验收脚本（见下面「界面验收」）。
 
 ```bash
-lc bind        # 重新写入凭据（会提示怎么从浏览器取 Cookie）
+lc bind        # 重新登录力扣（会弹出浏览器）
 lc sync        # 重建数据库
 lc draw --gen  # 重新生成工作区
 ```
 
 ---
+
+## 账号绑定是怎么做的
+
+**没有"复制 Cookie 粘贴进来"这种操作** —— 那是开发者才愿意做的事，而且很容易出错
+（漏掉 HttpOnly 的那条、或复制到已过期的值），失败时还会表现为"提示绑定成功但状态仍是未登录"。
+
+实际流程只有一步：点「登录力扣并绑定」→ 弹出一个独立窗口 → 扫码或输密码 → 自动完成。
+
+实现见 `src/leetcode/browser.js`：
+
+1. 探测本机 Chromium 系浏览器（Chrome / Edge / Brave / Chromium，各平台常见路径都覆盖了）
+2. 用 `--remote-debugging-port` 起一个**独立 profile** 的实例，打开力扣登录页
+   （独立 profile 是必须的：复用用户日常 profile 会撞上"Chrome 已在运行"，
+   已运行的实例不接受新的调试端口，CDP 连不上）
+3. 通过 CDP 的 `Network.getCookies` 轮询，拿到 `LEETCODE_SESSION` 就收工
+4. 关掉临时窗口，登录态写入 `.lc/credentials.json`
+
+CLI 的 `lc bind` 与界面上的按钮走的是同一套代码。
 
 ## 界面验收
 

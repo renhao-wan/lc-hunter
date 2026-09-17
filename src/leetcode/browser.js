@@ -103,8 +103,8 @@ export function browserReport() {
   return {
     ok: false,
     hint:
-      '没找到 Chrome / Edge / Chromium。可以手动指定：在 .lc/config.json 里加 ' +
-      '"browserPath": "你的浏览器路径"，或者改用「手动粘贴 Cookie」方式绑定。',
+      '没找到 Chrome / Edge / Chromium。装一个任意的即可，' +
+      '或者在本机 .lc/config.json 里加一行 "browserPath": "你的浏览器路径"。',
   };
 }
 
@@ -316,7 +316,7 @@ export async function loginAndCapture({ site = 'https://leetcode.cn', timeoutMs 
       }
       await sleep(900);
     }
-    throw new Error('等待登录超时。可以重试，或者改用「手动粘贴 Cookie」。');
+    throw new Error('等待登录超时。可以重试。');
   } catch (e) {
     cleanup();
     throw e;

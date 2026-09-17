@@ -162,7 +162,8 @@
   </div>
 </div>
 
-<!-- 绑定账号：主路径是一键登录，手动粘贴作为降级 -->
+<!-- 绑定账号：只有一条路径 —— 弹浏览器让用户登录，自动抓 Cookie。
+     没有任何"粘贴 Cookie"的入口，用户不需要知道 Cookie 是什么。 -->
 <div id="bindModal" class="modal" hidden>
   <div class="modal-card">
     <div class="modal-head">
@@ -171,9 +172,8 @@
     </div>
 
     <div class="modal-body">
-      <!-- 未绑定：一键登录 -->
       <div id="bindMain">
-        <p class="bind-lead">点下面按钮，会弹出一个小窗口让你登录力扣。登录成功就自动完成绑定，不需要手动复制任何东西。</p>
+        <p class="bind-lead" id="bindLead">点下面按钮，会弹出一个小窗口让你登录力扣。登录成功就自动完成绑定，不需要手动复制任何东西。</p>
 
         <!-- 已绑定时的账号卡片，由 JS 填充 -->
         <div id="bindAcct" class="acct-card" hidden></div>
@@ -189,32 +189,6 @@
 
         <div id="bindResult" class="bind-result" hidden></div>
       </div>
-
-      <!-- 降级：手动粘贴 -->
-      <details id="bindManualWrap" class="manual">
-        <summary>一键登录不行？手动粘贴 Cookie</summary>
-        <div class="manual-body">
-          <ol class="steps">
-            <li>在浏览器里登录 <a href="https://leetcode.cn" target="_blank" rel="noreferrer">leetcode.cn</a></li>
-            <li>按 <b>F12</b> 打开开发者工具，切到 <b>Application</b>（应用）标签</li>
-            <li>左侧 <b>Cookies</b> → <code>https://leetcode.cn</code></li>
-            <li>找到 <code>LEETCODE_SESSION</code> 和 <code>csrftoken</code>，各复制一次值</li>
-          </ol>
-          <div class="field">
-            <label>LEETCODE_SESSION <span class="req">必填</span></label>
-            <input id="cookieSession" type="text" spellcheck="false" placeholder="粘贴 LEETCODE_SESSION 的值">
-          </div>
-          <div class="field">
-            <label>csrftoken <span class="muted">（选填，建议一起填）</span></label>
-            <input id="cookieCsrf" type="text" spellcheck="false" placeholder="粘贴 csrftoken 的值">
-          </div>
-          <details class="paste-all">
-            <summary>或者直接粘贴整条 Cookie 字符串</summary>
-            <textarea id="cookieInput" rows="4" spellcheck="false" placeholder="csrftoken=...; LEETCODE_SESSION=...; ..."></textarea>
-          </details>
-          <button id="bindSave" class="ghost">用粘贴的 Cookie 绑定</button>
-        </div>
-      </details>
 
       <p class="muted small">
         登录态只保存在本机 <code>.lc/credentials.json</code>，不会上传到任何地方。

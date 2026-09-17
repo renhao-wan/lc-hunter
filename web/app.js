@@ -996,7 +996,14 @@ async function openBind() {
   renderBindModal(bindCap);
 }
 
-/** 三态渲染：已登录 / 有浏览器可一键登录 / 只能手动 */
+/**
+ * 渲染绑定弹窗。
+ *
+ * 只有两种状态：
+ *   - 已登录   → 显示账号卡片 + 「重新登录（换个账号）」
+ *   - 未登录   → 显示「登录力扣并绑定」
+ * 没有浏览器时按钮禁用并提示去装一个（不再有"手动粘贴 Cookie"这一路）。
+ */
 function renderBindModal(cap) {
   const acct = cap.account;
   const b = cap.browser || {};
@@ -1020,24 +1027,31 @@ function renderBindModal(cap) {
   }
 
   // 浏览器能力提示
+  //
+  // 没有浏览器时不能只报错 —— 用户会卡死在这一步。这里把"怎么解决"讲清楚：
+  // 装一个 Chrome/Edge，或者手动在配置里指路径。不再提供粘贴 Cookie 的退路。
   const info = $('bindBrowserInfo');
+  const lead = $('bindLead');
   if (b.ok) {
     info.className = 'capability ok';
     info.textContent = `将使用 ${b.name}（${b.source === 'installed' ? '本机已安装' : '内置内核'}）`;
+    // 引导语跟着状态走，别在按钮已经写了「换个账号」时还在说"首次绑定"
+    lead.textContent = acct?.signedIn
+      ? '点下面按钮，会弹出一个小窗口让你重新登录力扣（换账号用）。登录成功就自动替换掉当前账号。'
+      : '点下面按钮，会弹出一个小窗口让你登录力扣。登录成功就自动完成绑定，不需要手动复制任何东西。';
   } else {
     info.className = 'capability warn';
-    info.textContent = b.hint || '没找到可用的浏览器，请用下方手动方式绑定';
+    info.innerHTML =
+      `没找到可用的浏览器。装一个 <b>Chrome</b> 或 <b>Edge</b> 即可，` +
+      `也可以在本机 <code>.lc/config.json</code> 里加一行 ` +
+      `<code>"browserPath": "你的浏览器路径"</code>。`;
+    // 没有浏览器时按钮是禁用的，引导语不能再说"点下面按钮"
+    lead.textContent = '自动登录需要一个浏览器。装好之后关掉这个窗口再打开，就能直接登录了。';
   }
 
-  // 没有浏览器就自动展开手动区
-  $('bindManualWrap').open = !b.ok;
-  if (!b.ok) {
-    // 主按钮降级：不要让人点了没反应
-    $('bindLogin').textContent = '没有可用浏览器，请用下方手动绑定';
-    $('bindLogin').disabled = true;
-  } else {
-    $('bindLogin').disabled = false;
-  }
+  // 没有浏览器时主按钮禁用，避免点了没反应
+  $('bindLogin').disabled = !b.ok;
+  if (!b.ok) $('bindLogin').textContent = '需要先装一个浏览器';
 }
 
 async function doUnbind() {
@@ -1094,15 +1108,15 @@ async function doBrowserLogin() {
     // 把后端的技术性报错翻译成用户能看懂的一句话
     const m = e.message || '';
     if (m.includes('被关闭')) {
-      $('bindResult').textContent = '登录窗口被关闭了，绑定未完成。可以重试，或用下方手动方式绑定。';
+      $('bindResult').textContent = '登录窗口被关闭了，绑定未完成，可以重试。';
     } else if (m.includes('超时')) {
-      $('bindResult').textContent = '等待登录超时。可以重试，或用下方手动方式绑定。';
+      $('bindResult').textContent = '等待登录超时，可以重试。';
     } else {
       $('bindResult').textContent = m || '登录未完成';
     }
   } finally {
     btn.disabled = false;
-    if (bindCap?.browser?.ok) btn.textContent = '重试一键登录';
+    if (bindCap?.browser?.ok) btn.textContent = '重试登录';
   }
 }
 
@@ -1129,38 +1143,6 @@ function stopBindPoll() {
   bindTimer = null;
 }
 
-/** 手动降级：优先用分离的两个字段，其次用整条粘贴 */
-async function saveBind() {
-  const session = $('cookieSession')?.value.trim() || '';
-  const csrf = $('cookieCsrf')?.value.trim() || '';
-  const all = ($('cookieInput')?.value || '').trim();
-  const body = all && !session ? { cookie: all } : { session, csrf };
-  if (!body.cookie && !body.session) return toast('请先填写 Cookie', 'err');
-
-  const btn = $('bindSave');
-  btn.disabled = true;
-  btn.textContent = '验证中…';
-  try {
-    const r = await api('/api/bind', { method: 'POST', body });
-    if (r.signedIn) {
-      $('bindModal').hidden = true;
-      $('cookieSession').value = '';
-      $('cookieCsrf').value = '';
-      $('cookieInput').value = '';
-      toast(`绑定成功：${r.account?.name || ''}`, 'ok');
-    } else {
-      toast(r.warning || '已保存，但未能验证登录', 'err');
-    }
-    await loadState();
-    if (!$('plansModal').hidden) await openPlans();
-  } catch (e) {
-    toast(e.message, 'err');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '保存并验证';
-  }
-}
-
 // ---------------- 事件绑定 ----------------
 
 $('drawBtn').onclick = doDraw;
@@ -1169,7 +1151,6 @@ $('runBtn').onclick = doRun;
 $('saveBtn').onclick = saveFile;
 $('bindBtn').onclick = openBind;
 $('bindLogin').onclick = doBrowserLogin;
-$('bindSave').onclick = saveBind;
 $('bindCancel').onclick = () => {
   stopBindPoll();
   $('bindModal').hidden = true;
