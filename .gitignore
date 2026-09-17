@@ -1,0 +1,57 @@
+# 本地状态与凭据 —— 绝对不要提交
+#
+# .lc/credentials.json 里存的是真的 LEETCODE_SESSION（登录会话令牌），
+# 泄露出去等于把账号交出去；本地数据库同理，里面有做题记录和个人进度。
+.lc/
+.lc-hunter.db
+.lc-hunter.db-shm
+.lc-hunter.db-wal
+
+# 抽题生成的工作区：题目内容 + 本地编译产物 + 你的解答
+#
+# 这里既有 LeetCode 的版权题面，也有 .class 这种平台相关的二进制，
+# 不同人的 JDK 版本产物还不能通用。属于"本地生成物"，不进版本库。
+workspace/
+
+# 调试与验收产物
+#
+# test/ 里有两类文件，只有第一类值得留：
+#   probe-*.js / smoke.js / _verify-*.js —— 可复用的探针与验收脚本，要提交
+#   下面这些是运行产物，每次跑都不一样
+test/_.png
+test/_*.png
+test/_*.json
+test/_*.txt
+test/_*.out.txt
+test/_*.log
+test/probe-*-out.txt
+test/probe2-err.log
+test/probe-err.log
+test/*.png
+test/*-out.txt
+test/*-err.log
+
+# 编译产物
+*.class
+target/
+out/
+build/
+
+# Node（本项目零依赖，但以防万一）
+node_modules/
+npm-debug.log*
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 日志与临时文件
+*.log
+*.tmp
+.tmp/
+tmp/

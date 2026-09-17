@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lc-hunter · 力扣刷题辅助</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">lc<span>-hunter</span></div>
+
+  <button id="plansBtn" class="ghost">选择学习计划</button>
+
+  <div class="spacer"></div>
+
+  <div id="stats" class="stats"></div>
+  <button id="bindBtn" class="ghost">绑定账号</button>
+  <button id="themeBtn" class="ghost icon" title="切换深浅色">◐</button>
+</header>
+
+<!-- 操作条：把「选范围 → 抽题 → 生成 → 运行」串成一条明确的操作线 -->
+<div class="actionbar">
+  <div class="action-step">
+    <label>从哪抽题</label>
+    <select id="planSel" title="选一个学习计划，或从全部题目里抽"><option value="">全部题目</option></select>
+  </div>
+
+  <div class="action-step">
+    <label>抽什么样的</label>
+    <select id="modeSel" title="决定抽出来的题是新的还是复习的">
+      <option value="all">不限</option>
+      <option value="new">还没做过的</option>
+      <option value="ac">做过的（复习）</option>
+      <option value="due">今天该复习的</option>
+    </select>
+  </div>
+
+  <div class="action-step">
+    <label>抽几道</label>
+    <input id="countInput" type="number" min="1" max="20" value="1">
+  </div>
+
+  <!-- 这个范围里有多少题能抽，随「从哪抽题 / 抽什么样的」实时变化 -->
+  <div class="action-step">
+    <label>能抽到的题</label>
+    <div id="poolCount" class="pool-count" title="当前范围下，符合「抽什么样的」的题目数量">—</div>
+  </div>
+
+  <div class="action-main">
+    <button id="drawBtn" class="primary">抽一道题</button>
+  </div>
+</div>
+
+<main id="mainArea">
+  <!-- 左：题目列表 -->
+  <aside class="panel list-panel" id="listPanel">
+    <div class="panel-head">
+      <button class="ghost icon collapse-btn" id="collapseList" title="收起题目列表">‹</button>
+      <input id="searchInput" type="search" placeholder="搜索题目">
+      <select id="filterSel" title="只看某种状态的题">
+        <option value="">全部状态</option>
+        <option value="ac">已通过</option>
+        <option value="notac">做过没过</option>
+        <option value="new">没做过</option>
+        <option value="due">今天该复习</option>
+      </select>
+    </div>
+    <div class="scope-bar" id="scopeBar" hidden>
+      <span id="scopeLabel"></span>
+      <button id="scopeClear" class="ghost tiny">换一个</button>
+    </div>
+    <div id="problemList" class="list"></div>
+  </aside>
+
+  <!-- 左栏收起后的展开把手 -->
+  <button class="panel-reopen" id="reopenList" hidden title="展开题目列表">题目列表 ›</button>
+
+  <!-- 中：题面 -->
+  <section class="panel desc-panel" id="descPanel">
+    <!-- 没选题目时显示空状态，选了就换成题面 -->
+    <div id="welcome" class="welcome"></div>
+
+    <div id="descWrap" class="desc-wrap" hidden>
+      <div class="panel-head">
+        <div id="problemTitle" class="title"></div>
+        <div class="head-actions">
+          <a id="lcLink" class="ghost" target="_blank" rel="noreferrer" hidden>去力扣看原题</a>
+          <button id="genBtn" class="ghost">准备工作区</button>
+          <button class="ghost icon collapse-btn" id="collapseDesc" title="收起题面">›</button>
+        </div>
+      </div>
+      <div id="problemMeta" class="meta"></div>
+      <div id="kamaBox" class="kama" hidden></div>
+      <!-- 题面正文。长题干默认折叠一部分，像力扣那样点「展开」看全 -->
+      <div id="problemDesc" class="desc scroll is-clamped"></div>
+      <div class="desc-foot">
+        <button id="descToggle" class="ghost small-btn" hidden>展开完整题面</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 右：编辑器 + 运行 -->
+  <section class="panel code-panel">
+    <div class="panel-head">
+      <div id="fileTabs" class="tabs"></div>
+      <div class="head-actions">
+        <button id="saveBtn" class="ghost" title="Ctrl+S">保存</button>
+        <button id="runBtn" class="primary" title="Ctrl+Enter">运行</button>
+      </div>
+    </div>
+    <textarea id="editor" spellcheck="false" placeholder="还没有代码。抽一道题后点「准备工作区」，会自动生成 Solution.java 等文件。"></textarea>
+    <div class="result-head">
+      <span id="runStatus" class="muted">还没运行</span>
+      <div class="head-actions" id="reviewBox" hidden>
+        <span class="muted">记一次复习：</span>
+        <button class="qbtn" data-q="0">0</button>
+        <button class="qbtn" data-q="1">1</button>
+        <button class="qbtn" data-q="2">2</button>
+        <button class="qbtn" data-q="3">3</button>
+        <button class="qbtn" data-q="4">4</button>
+        <button class="qbtn" data-q="5">5</button>
+      </div>
+    </div>
+    <div id="runResult" class="result scroll"></div>
+  </section>
+</main>
+
+<!-- 学习计划广场：绑定 → 选计划 → 抽计划里的题 -->
+<div id="plansModal" class="modal" hidden>
+  <div class="modal-card wide">
+    <div class="modal-head">
+      <h3>学习计划</h3>
+      <button id="plansClose" class="ghost">关闭</button>
+    </div>
+
+    <div id="plansAccount" class="account-bar"></div>
+
+    <div class="modal-body">
+      <section class="plans-section" id="myPlansSection">
+        <h4 class="sec-toggle" id="myPlansToggle" title="点击收起 / 展开这一节">
+          <span class="caret">▾</span>我加入的计划 <span class="muted small" id="myPlansHint"></span>
+        </h4>
+        <div id="myPlansList" class="plan-grid"></div>
+      </section>
+
+      <section class="plans-section">
+        <div class="section-head">
+          <h4>全部计划 <span class="muted small">（免登录可用，点「同步」拉进本地）</span></h4>
+          <input id="planSearch" type="search" placeholder="筛选计划">
+        </div>
+        <div id="allPlansList" class="plan-grid"></div>
+      </section>
+    </div>
+
+    <div class="modal-actions">
+      <span id="plansStatus" class="muted small"></span>
+      <button id="syncFeatured" class="ghost" title="一次同步内置精选计划">同步精选计划</button>
+      <button id="syncMine" class="primary">同步我加入的全部计划</button>
+    </div>
+  </div>
+</div>
+
+<!-- 绑定账号：主路径是一键登录，手动粘贴作为降级 -->
+<div id="bindModal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>绑定力扣账号</h3>
+      <button id="bindCancel" class="ghost">关闭</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- 未绑定：一键登录 -->
+      <div id="bindMain">
+        <p class="bind-lead">点下面按钮，会弹出一个小窗口让你登录力扣。登录成功就自动完成绑定，不需要手动复制任何东西。</p>
+
+        <!-- 已绑定时的账号卡片，由 JS 填充 -->
+        <div id="bindAcct" class="acct-card" hidden></div>
+
+        <div id="bindBrowserInfo" class="capability"></div>
+
+        <button id="bindLogin" class="primary big">登录力扣并绑定</button>
+
+        <div id="bindProgress" class="bind-progress" hidden>
+          <div class="spinner-line"><span class="dot"></span><span id="bindStatusText">准备中…</span></div>
+          <p class="muted small">请在弹出的窗口里扫码或输入账号密码。登录完成后本页会自动更新。</p>
+        </div>
+
+        <div id="bindResult" class="bind-result" hidden></div>
+      </div>
+
+      <!-- 降级：手动粘贴 -->
+      <details id="bindManualWrap" class="manual">
+        <summary>一键登录不行？手动粘贴 Cookie</summary>
+        <div class="manual-body">
+          <ol class="steps">
+            <li>在浏览器里登录 <a href="https://leetcode.cn" target="_blank" rel="noreferrer">leetcode.cn</a></li>
+            <li>按 <b>F12</b> 打开开发者工具，切到 <b>Application</b>（应用）标签</li>
+            <li>左侧 <b>Cookies</b> → <code>https://leetcode.cn</code></li>
+            <li>找到 <code>LEETCODE_SESSION</code> 和 <code>csrftoken</code>，各复制一次值</li>
+          </ol>
+          <div class="field">
+            <label>LEETCODE_SESSION <span class="req">必填</span></label>
+            <input id="cookieSession" type="text" spellcheck="false" placeholder="粘贴 LEETCODE_SESSION 的值">
+          </div>
+          <div class="field">
+            <label>csrftoken <span class="muted">（选填，建议一起填）</span></label>
+            <input id="cookieCsrf" type="text" spellcheck="false" placeholder="粘贴 csrftoken 的值">
+          </div>
+          <details class="paste-all">
+            <summary>或者直接粘贴整条 Cookie 字符串</summary>
+            <textarea id="cookieInput" rows="4" spellcheck="false" placeholder="csrftoken=...; LEETCODE_SESSION=...; ..."></textarea>
+          </details>
+          <button id="bindSave" class="ghost">用粘贴的 Cookie 绑定</button>
+        </div>
+      </details>
+
+      <p class="muted small">
+        登录态只保存在本机 <code>.lc/credentials.json</code>，不会上传到任何地方。
+        随时可以在右上角账号菜单里解绑。
+      </p>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

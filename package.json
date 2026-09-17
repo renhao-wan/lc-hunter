@@ -1,0 +1,18 @@
+{
+  "name": "lc-hunter",
+  "version": "0.1.0",
+  "description": "力扣刷题辅助：学习计划加权抽题 + 间隔复习 + 核心/ACM 双模式（本地可编译运行）",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "lc": "bin/lc.js"
+  },
+  "scripts": {
+    "lc": "node --disable-warning=ExperimentalWarning bin/lc.js",
+    "start": "node --disable-warning=ExperimentalWarning bin/lc.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,1228 @@
+/* lc-hunter Web UI —— 向力扣站点的视觉语言看齐：
+   浅色为主、橙色主色、中性灰底、细边框、圆角卡片、中文优先字体。 */
+:root {
+  color-scheme: dark;
+  --bg: #161616;
+  --bg-panel: #212121;
+  --bg-elev: #2e2e2e;
+  --bg-input: #1b1b1b;
+  --bg-sunken: #1b1b1b;
+  --bg-chrome: #242424;
+  --border: #383838;
+  --border-strong: #4a4a4a;
+  --text: #eff1f6;
+  --text-dim: #9a9a9a;
+  --text-faint: #6f6f6f;
+  --accent: #ffa116;
+  --accent-hover: #ffb340;
+  --accent-dim: #4a3a1f;
+  --green: #2cbb5d;
+  --red: #ef4743;
+  --yellow: #ffb800;
+  --blue: #4a9eff;
+  --mono: ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, "Liberation Mono", monospace;
+  --radius: 6px;
+  --radius-lg: 10px;
+  /* 层次感的三个载体：卡片投影、容器内嵌描边、顶栏投影 */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .28), 0 2px 8px rgba(0, 0, 0, .18);
+  --shadow-chrome: 0 1px 3px rgba(0, 0, 0, .3);
+  --inset-hair: inset 0 1px 0 rgba(255, 255, 255, .035);
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  /* 页面底比面板明显更深，面板才"浮"得起来 —— 之前两者几乎同色，是"层次感不够"的主因 */
+  --bg: #eceef2;
+  --bg-panel: #ffffff;
+  --bg-elev: #f4f6f8;
+  --bg-input: #ffffff;
+  --bg-sunken: #fafbfc;
+  --bg-chrome: #f8f9fb;
+  --border: #e3e6eb;
+  --border-strong: #ccd1d9;
+  --text: #1f2328;
+  --text-dim: #6b7280;
+  --text-faint: #9aa2ad;
+  --accent: #ffa116;
+  --accent-hover: #e08c0c;
+  --accent-dim: #fff4e0;
+  --green: #00a186;
+  --red: #d93838;
+  --yellow: #c78a00;
+  --blue: #0a6fa8;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, .05), 0 3px 10px rgba(16, 24, 40, .06);
+  --shadow-chrome: 0 1px 2px rgba(16, 24, 40, .05);
+  --inset-hair: none;
+}
+
+* { box-sizing: border-box; }
+
+/*
+ * 关键：任何 display 声明都会压过 [hidden] 的 UA 默认 display:none，
+ * 所以 .modal{display:flex} / .toast 这类必须在这里强制让位。
+ * 少这一条，弹窗和 toast 会永远挂在屏幕上。
+ */
+[hidden] { display: none !important; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------- 顶栏 ---------------- */
+/* 顶栏用 --bg-chrome（比面板略深）而不是纯白，这样内容区才是"亮起来"的一层 */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  height: 50px;
+  background: var(--bg-chrome);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-chrome);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 3;
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -.2px;
+  margin-right: 6px;
+  color: var(--text);
+}
+.brand span { color: var(--accent); font-weight: 600; }
+
+.spacer { flex: 1; }
+
+/* 统计数字：安静地待在右边，鼠标悬停才展开说明 */
+.stats {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  align-items: center;
+}
+.stats .stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  cursor: default;
+}
+.stats b {
+  color: var(--text);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.stats:not(:empty) {
+  padding-right: 14px;
+  border-right: 1px solid var(--border);
+  margin-right: 4px;
+}
+
+button, select, input[type='number'], input[type='search'] {
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color .12s, background .12s;
+}
+button { cursor: pointer; }
+button:hover { border-color: var(--text-dim); }
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a1a1a;
+  font-weight: 500;
+}
+button.primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+button.ghost { background: transparent; border-color: var(--border-strong); }
+button.ghost:hover { background: var(--bg-elev); }
+button.ghost.icon { padding: 5px 9px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+input[type='number'] { width: 64px; }
+select { cursor: pointer; }
+
+/* 顶栏里的按钮更紧凑一点 */
+.topbar button { padding: 5px 12px; }
+
+a.ghost {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 13px;
+  transition: background .12s;
+}
+a.ghost:hover { background: var(--bg-elev); }
+
+/* 账号按钮：登录后用绿色描边 + 浅绿底，一眼能看出"已登录" */
+button.ok {
+  border-color: var(--green);
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 8%, transparent);
+  font-weight: 500;
+}
+button.ok:hover {
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+  border-color: var(--green);
+}
+
+/* ---------------- 操作条 ---------------- */
+/*
+ * 「选范围 → 抽题」单独成条。
+ * 每个控件上方带一句人话标签，用户不用猜这个下拉是干什么的。
+ */
+.actionbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 10px 16px 12px;
+  background: var(--bg-chrome);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-chrome);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 2;
+}
+
+.action-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.action-step label {
+  font-size: 11px;
+  color: var(--text-faint);
+  padding-left: 1px;
+  letter-spacing: .2px;
+}
+.action-step select,
+.action-step input { min-width: 142px; }
+.action-step input[type='number'] { min-width: 0; width: 68px; }
+
+/* 「能抽到的题」：只是个数字，不要做成输入框的样子 */
+.pool-count {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  white-space: nowrap;
+  cursor: default;
+}
+.pool-count.zero { color: var(--text-faint); font-weight: 500; }
+.pool-count.loading { color: var(--text-faint); font-weight: 400; font-size: 13px; }
+
+.action-main { margin-left: auto; }
+.action-main button {
+  padding: 6px 22px;
+  font-size: 13px;
+}
+
+/* ---------------- 布局 ---------------- */
+/*
+ * 层次感的来源：页面底(--bg 灰) → 面板(--bg-panel 白 + 投影) → 面板内凹槽(--bg-sunken)。
+ * gap 给到 12px，面板之间的缝要能看出是"缝"而不是同色块拼接的接缝。
+ */
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 290px minmax(300px, 1fr) minmax(380px, 1.15fr);
+  gap: 12px;
+  padding: 12px;
+  min-height: 0;
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 面板标题栏比面板略深一档，形成"面板里还有一层"的纵深 */
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  min-height: 42px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--inset-hair);
+  flex-shrink: 0;
+  min-width: 0;
+}
+/* 按钮组不参与压缩，否则文件标签一多就被挤成竖排 */
+.head-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+
+.list-panel .panel-head input { flex: 1; min-width: 0; }
+
+/*
+ * 题面容器：panel-head / meta / 底部按钮固定，只有 desc 这一段自己滚。
+ *
+ * min-height: 0 是必须的 —— flex 子项默认 min-height:auto，
+ * 不加这行的话内容再长也只会把容器撑高，overflow 永远不触发，
+ * 面板底部的「展开」按钮会被挤出可视区（窄屏实测就是这个问题）。
+ */
+.desc-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.scroll { overflow: auto; }
+.muted { color: var(--text-dim); }
+.small { font-size: 12px; }
+
+/* ---------------- 折叠 ---------------- */
+.collapse-btn {
+  padding: 2px 7px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-dim);
+  border-color: transparent;
+  flex-shrink: 0;
+}
+.collapse-btn:hover { color: var(--text); border-color: var(--border-strong); }
+
+/* 左栏收起 / 中栏收起的状态 */
+/*
+ * 收起时不给 0 宽度 —— 留一条窄列专门放展开把手，
+ * 否则把手会浮在编辑器上挡住内容。40px 是竖排"题目列表 ›"刚好放得下的宽度。
+ */
+main.list-collapsed { grid-template-columns: 40px minmax(300px, 1fr) minmax(380px, 1.15fr); }
+main.desc-collapsed { grid-template-columns: 290px 40px minmax(380px, 1fr); }
+main.list-collapsed.desc-collapsed { grid-template-columns: 40px 40px minmax(380px, 1fr); }
+
+/* 收起的那一栏整个让位，格子交给展开把手 */
+main.desc-collapsed #descPanel { display: none; }
+main.list-collapsed #listPanel { display: none; }
+
+/* 收起后留下的展开把手，竖排显示 */
+.panel-reopen {
+  writing-mode: vertical-rl;
+  padding: 14px 5px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  letter-spacing: 1px;
+  align-self: start;
+  transition: color .12s, border-color .12s;
+}
+.panel-reopen:hover { color: var(--accent); border-color: var(--accent); }
+
+/*
+ * 把手必须显式定位，不能靠 grid 自动放置。
+ *
+ * 之前 #reopenDesc 是 #descPanel 的兄弟、排在它后面。收起题面时
+ * #descPanel 变成 display:none，自动放置就把 #reopenDesc 当成"行内第 2 个可见项"
+ * 从头排，结果它占了第 1 列 —— 在「只收起题面」时那是 290px 宽的大格子，
+ * 把手被拉成一个大方块，把左栏整个顶掉。
+ *
+ * 现在改成由 JS 把 #reopenDesc 插到 #reopenList 之后（见 app.js 的 applyCollapse），
+ * 并按状态显式指定列，四种组合都能落在正确的窄格里。
+ */
+#reopenList { grid-column: 1; grid-row: 1; }
+#reopenDesc { grid-column: 1; grid-row: 1; }
+
+/* 只收起左栏：题面把手回到中栏位置（第 2 列） */
+main.list-collapsed:not(.desc-collapsed) #reopenDesc { grid-column: 2; grid-row: 1; }
+/* 只收起题面：题面把手补到第 2 列（左栏还占着第 1 列） */
+main.desc-collapsed:not(.list-collapsed) #reopenDesc { grid-column: 2; grid-row: 1; }
+/* 两个都收起：左栏把手第 1 列，题面把手第 2 列 */
+main.list-collapsed.desc-collapsed #reopenList { grid-column: 1; grid-row: 1; }
+main.list-collapsed.desc-collapsed #reopenDesc { grid-column: 2; grid-row: 1; }
+
+/* ---------------- 空状态 ---------------- */
+/*
+ * 空着什么都不放会让人以为坏了。给一句人话 + 一个入口就够了，
+ * 不需要流程图那种视觉噪音。
+ */
+.welcome {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+}
+.welcome-inner {
+  text-align: center;
+  max-width: 400px;
+}
+.welcome-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+.welcome-sub {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+.welcome-cta {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.welcome-hint {
+  margin: 18px 0 0;
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.7;
+}
+
+/* ---------------- 题目列表 ---------------- */
+.list { overflow: auto; padding: 6px; }
+.prob {
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 3px 8px;
+  align-items: center;
+  font-size: 13px;
+  transition: background .1s;
+}
+.prob:hover { background: var(--bg-elev); }
+.prob.active {
+  background: var(--accent-dim);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.prob.active .pname { color: var(--text); font-weight: 500; }
+
+/* ---------------- 左栏按计划分组 ---------------- */
+/*
+ * 全库视图下题目散在多个计划里，加一条分组标题把它们分开。
+ * 标题是 sticky 的，滚到哪都知道现在看的是哪个计划。
+ */
+.group-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px 6px;
+  margin: 4px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: .3px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+.group-head .gn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-head .gc {
+  margin-left: auto;
+  font-weight: 500;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.group-head:first-child { margin-top: 0; }
+.pid {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.pname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diff { font-size: 12px; font-weight: 500; }
+.diff.Easy { color: var(--green); }
+.diff.Medium { color: var(--yellow); }
+.diff.Hard { color: var(--red); }
+.badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.badge-ok {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 45%, transparent);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+}
+.badge-due {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* 状态标记单独一行，避免和题名抢空间 */
+.prob .pstate {
+  grid-column: 2 / -1;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  min-height: 0;
+}
+
+button.small-btn { padding: 5px 12px; font-size: 12px; }
+
+/* ---------------- 题面 ---------------- */
+.title {
+  font-weight: 500;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meta {
+  padding: 7px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-height: 32px;
+}
+
+/* 题面按力扣的阅读习惯排版：大字标题、舒适行距、代码块有底色 */
+.desc {
+  padding: 16px 18px 32px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text);
+}
+.desc > :first-child { margin-top: 0; }
+.desc h3 {
+  margin: 22px 0 8px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.desc h4 {
+  margin: 18px 0 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.desc p { margin: 10px 0; }
+.desc strong, .desc b { font-weight: 500; }
+.desc ul { margin: 10px 0; padding-left: 22px; }
+.desc li { margin: 4px 0; }
+.desc pre {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 12px 0;
+}
+.desc code {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--bg-elev);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.desc pre code { background: transparent; padding: 0; }
+.desc blockquote {
+  margin: 12px 0;
+  padding: 4px 0 4px 12px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-dim);
+}
+/* 力扣题面里的「示例」常用 <strong>Input:</strong>，这里让它略突出 */
+.desc .example, .desc .example-block {
+  background: var(--bg-elev);
+  border-radius: var(--radius);
+  padding: 10px 13px;
+  margin: 10px 0;
+}
+
+/*
+ * 长题干折叠。
+ *
+ * 力扣的做法是默认只露一部分，点「展开」看全 —— 有些题的描述长到
+ * 把代码编辑区挤没了。这里用两态：
+ *   收起态(max-height 按面板高度算 + overflow:hidden)：露到面板下沿为止，底部渐隐提示"下面还有"
+ *   展开态(flex:1 + overflow:auto)：占满剩余高度，自己滚
+ *
+/*
+ * 折叠高度用 max-height: min(62vh, 460px) 而不是写死 320px：
+ * 320px 在大屏上会在正文和第一个示例块之间留一大段空白，再往下才切断，
+ * 看着像"没内容了却还空着"。跟着视口走，短题自然触不到上限(按钮隐藏)，
+ * 长题也能多露一屏。
+ *
+ * flex 用 `0 1 auto` 而不是 `none`：
+ * max-height 只封住上限，面板本身变矮时（窄屏堆叠布局）容器仍会要求完整高度，
+ * 结果把 .desc-foot 连同「展开」按钮一起推出面板、被 overflow:hidden 裁掉。
+ * 允许收缩 + min-height:0，它就会乖乖让位，按钮永远留在面板底部。
+ */
+.desc.is-clamped {
+  max-height: min(62vh, 460px);
+  overflow: hidden;
+  position: relative;
+  flex: 0 1 auto;
+  min-height: 0;
+}
+/*
+ * 渐隐遮罩要扣掉 .desc 的左右 padding，否则会盖住文字的两端。
+ * 更关键的是它贴着裁切边缘——高度别开太大：72px 的高斯渐隐会把最后
+ * 一整个代码块糊掉，看着像渲染坏了。56px + 提前完全透明更接近力扣的手感。
+ */
+.desc.is-clamped::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 0;
+  height: 56px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    color-mix(in srgb, var(--bg-panel) 55%, transparent) 38%,
+    var(--bg-panel) 100%
+  );
+}
+/* 展开态：把高度还给内容，让它在剩余空间里滚 */
+.desc:not(.is-clamped) { flex: 1; min-height: 0; }
+
+/* 展开按钮：贴在题面下方的一条通栏，展开后变成"收起" */
+.desc-foot {
+  flex-shrink: 0;
+  padding: 0 18px 12px;
+  background: var(--bg-panel);
+}
+.desc-foot button { width: 100%; }
+
+.kama {
+  margin: 10px 14px 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-dim);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.kama .khead { font-weight: 500; margin-bottom: 5px; color: var(--accent); }
+.kama pre {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  font-family: var(--mono);
+  color: var(--text);
+}
+.kama .unbind { margin-top: 8px; }
+
+/* ---------------- 编辑器 ---------------- */
+/* 文件多了横向滚，不要换行 —— 换行会把标题栏堆成三行 */
+.tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.tabs::-webkit-scrollbar { height: 4px; }
+.tab {
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-family: var(--mono);
+  cursor: pointer;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background .1s;
+}
+.tab:hover { background: var(--bg-elev); }
+.tab.active {
+  background: var(--bg-elev);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+#editor {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  padding: 14px 16px;
+  /* 编辑器比面板底更深一档 —— 代码区"凹"进去，和白底的题面拉开 */
+  background: var(--bg-sunken);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.65;
+  tab-size: 4;
+  outline: none;
+}
+#editor::placeholder { color: var(--text-faint); }
+
+.result-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  flex-shrink: 0;
+  background: var(--bg-elev);
+}
+.result {
+  height: 32%;
+  min-height: 120px;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg-sunken);
+}
+.case { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed var(--border); }
+.case:last-child { border-bottom: 0; }
+.pass { color: var(--green); }
+.fail { color: var(--red); }
+.warnline { color: var(--yellow); }
+
+.qbtn { padding: 2px 8px; font-size: 11px; }
+
+/* ---------------- 弹窗 / toast ---------------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.modal-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  width: min(560px, 92vw);
+}
+.modal-card.wide {
+  width: min(980px, 94vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+.modal-card h3 { margin: 0 0 8px; }
+.modal-card textarea { width: 100%; font-family: var(--mono); font-size: 12px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; align-items: center; }
+.modal-card.wide .modal-actions {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  margin-top: 0;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-head h3 { margin: 0; }
+.modal-head button { margin-left: auto; }
+.modal-body { overflow: auto; padding: 4px 20px 16px; flex: 1; min-height: 0; }
+
+/* ---------------- 学习计划广场 ---------------- */
+.account-bar {
+  padding: 8px 20px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text-dim);
+}
+.account-bar b { color: var(--text); }
+.account-bar .warn { color: var(--yellow); }
+
+.plans-section { margin-top: 16px; }
+.plans-section h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.section-head h4 { margin: 0; }
+.section-head input { margin-left: auto; width: 200px; font-size: 12px; }
+
+/* 「我加入的计划」标题也可折叠，和下面的分类标题保持一致的手感 */
+.sec-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  padding: 5px 0;
+}
+.sec-toggle:hover { color: var(--accent); }
+.sec-toggle .caret {
+  font-size: 11px;
+  color: var(--text-faint);
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.plan-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--bg-elev);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.plan-card.synced { border-color: var(--accent-dim); }
+.plan-card.mine { border-left: 3px solid var(--accent); }
+.plan-card.dim { opacity: .62; }
+
+.plan-title {
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.plan-title .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-slug { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+.plan-desc { font-size: 12px; color: var(--text-dim); line-height: 1.45; }
+.plan-meta { display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--text-dim); flex-wrap: wrap; }
+.plan-actions { display: flex; gap: 6px; margin-top: 2px; }
+.plan-actions button { padding: 3px 10px; font-size: 12px; }
+
+.progbar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-input);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.progbar > i { display: block; height: 100%; background: var(--green); }
+
+.tag {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.tag.plus { color: var(--yellow); border-color: var(--yellow); }
+.tag.mine { color: var(--accent); border-color: var(--accent); }
+.tag.ok { color: var(--green); border-color: var(--green); }
+
+/* 左栏顶部的"当前范围"提示 */
+/*
+ * 橙底 + 深字（和主按钮一致）。之前是橙底配白字，
+ * 浅橙(#fff4e0)背景下白字基本看不见。
+ */
+.scope-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  background: var(--accent-dim);
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.scope-bar b { color: var(--accent); font-weight: 600; }
+.scope-bar button.tiny {
+  margin-left: auto;
+  padding: 1px 8px;
+  font-size: 11px;
+  background: transparent;
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent);
+  font-weight: 500;
+}
+.scope-bar button.tiny:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+
+/* 旧的静态分类标题（已不用于「全部计划」，保留给别处复用） */
+.plan-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin: 16px 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 可折叠的分类标题：整条都能点，右边挂数量 */
+/*
+ * 关键：分类标题在 grid 里必须横跨整行（grid-column: 1/-1），
+ * 否则它会像一张卡片那样只占一个格子，看起来像是某张计划卡的名字。
+ * 被 hidden 的卡片不占位，但没 hidden 的卡片会和标题混排 —— 所以标题
+ * 必须是强制换行的独占行。
+ */
+.plan-group-title.group-toggle {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  user-select: none;
+  padding: 7px 10px;
+  margin: 10px 0 2px;
+  border: 0;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--bg-elev);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  transition: background .1s;
+}
+.plan-group-title.group-toggle.collapsed { color: var(--text-dim); }
+.plan-group-title.group-toggle:hover {
+  background: var(--bg-sunken);
+  color: var(--text);
+}
+.plan-group-title .caret {
+  font-size: 10px;
+  color: var(--text-faint);
+  width: 10px;
+  flex-shrink: 0;
+}
+.plan-group-title .gt-name { flex: 1; min-width: 0; }
+.plan-group-title .gt-count {
+  font-weight: 500;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.empty-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 30px 22px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  text-align: center;
+}
+/* 独立占满一栏时给个卡片感，不要和背景糊在一起 */
+.empty-hint:not(.inline) {
+  margin: 20px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-sunken);
+}
+.empty-hint strong {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 14px;
+  display: block;
+}
+.empty-hint code {
+  font-family: var(--mono);
+  background: var(--bg-elev);
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+.empty-hint .empty-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.empty-hint.inline { padding: 18px 12px; font-size: 12px; }
+
+/* 加载中的呼吸点，单独用也能显示（不依赖 .spinner-line） */
+.empty-hint .dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-right: 7px;
+  vertical-align: middle;
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+/* ---------------- 绑定账号 ---------------- */
+#bindModal .modal-card { width: min(600px, 94vw); }
+#bindModal .modal-body { padding: 4px 20px 18px; }
+
+.bind-lead {
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 12px 0 14px;
+}
+
+.capability {
+  font-size: 12px;
+  padding: 8px 11px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text-dim);
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+.capability b { color: var(--text); }
+.capability.warn { border-color: var(--yellow); color: var(--yellow); }
+.capability.ok { border-color: var(--green); }
+
+button.big {
+  width: 100%;
+  padding: 10px;
+  font-size: 14px;
+}
+
+.bind-progress {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  background: var(--bg-elev);
+}
+.spinner-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: pulse 1.1s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: .3; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+.bind-progress p { margin: 8px 0 0; }
+
+.bind-result {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+  border: 1px solid var(--border);
+}
+.bind-result.ok { border-color: var(--green); }
+.bind-result.err { border-color: var(--red); }
+.bind-result b { font-weight: 500; }
+
+.manual {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.manual > summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 4px 0;
+}
+.manual > summary:hover { color: var(--text); }
+.manual-body { padding-top: 10px; }
+
+.steps {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.9;
+  padding-left: 20px;
+  margin: 0 0 12px;
+}
+.steps b { color: var(--text); }
+.steps code, .field code {
+  font-family: var(--mono);
+  background: var(--bg-input);
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.field { margin-bottom: 10px; }
+.field label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+  color: var(--text-dim);
+}
+.field label .req { color: var(--red); }
+.field input {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.paste-all { margin: 10px 0; }
+.paste-all > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.paste-all textarea {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+/* 已绑定时的账号卡片 */
+.acct-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  margin: 12px 0;
+}
+.acct-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.acct-info { flex: 1; min-width: 0; }
+.acct-name { font-size: 14px; font-weight: 500; }
+.acct-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  z-index: 60;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .35);
+  max-width: 72vw;
+}
+.toast.err { border-color: var(--red); color: var(--red); }
+.toast.ok { border-color: var(--green); }
+
+@media (max-width: 1100px) {
+  /*
+   * 窄屏（≤1100px）用「上：列表｜题面 左右并排 / 下：代码区」两行布局。
+   *
+   * 为什么不用三段竖排：题面面板有约 137px 跑不掉的固定开销
+   * （panel-head 50 + meta 40 + 展开按钮 40），竖排时一行只分到 200px 上下，
+   * 扣掉开销后正文只剩 50~80px，等于看不见题。左右并排则把这份开销只付一次，
+   * 而列表本来 220px 就够用，并排不浪费。
+   *
+   * 行高按用户选择「题面为主，代码区在下」定成 11:9（约 55% : 45%）。
+   *
+   * 踩过的坑（都表现为「展开」按钮在 DOM 里却看不见，
+   * 因为 body 是 overflow:hidden，溢出部分直接被裁）：
+   *   1fr 1fr                  —— 题面被压到 130px，示例块和按钮全被挤出可视区
+   *   auto + minmax            —— 按钮回来了，但 640px 高的屏上题面正文只剩 91px
+   *   三段竖排 1.2fr/2.4fr/2.4fr —— 固定开销付三遍，题面正文只剩 77px
+   *   纯 vh 混用                —— 下限之和超过视口，按钮被裁到屏外(inView=false)
+   *
+   * 结论：两行纯 fr 分配，零下限零 vh，永远精确铺满不溢出。
+   */
+  main {
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-rows: 11fr 9fr;
+    gap: 10px;
+    padding: 10px;
+  }
+  #listPanel { grid-column: 1; grid-row: 1; }
+  #descPanel { grid-column: 2; grid-row: 1; }
+  #codePanel, .code-panel { grid-column: 1 / -1; grid-row: 2; }
+
+  /* 窄屏收紧题面的固定开销，把省下的高度全给正文 */
+  .desc-panel .panel-head { min-height: 38px; padding: 6px 12px; }
+  #problemMeta { padding: 6px 14px; }
+
+  /* 题面正文的高度由所在行决定，放开 max-height 免得跟行高打架 */
+  .desc.is-clamped { max-height: none; }
+  /* 展开按钮贴到面板底部，不随内容高度浮动，视线位置更稳 */
+  .desc-foot { padding: 6px 18px 10px; border-top: 1px solid var(--border); }
+
+  /* 并排布局下没有位置塞把手，取消收起态，避免把手孤零零占一格 */
+  main.list-collapsed,
+  main.desc-collapsed,
+  main.list-collapsed.desc-collapsed { grid-template-columns: 220px minmax(0, 1fr); }
+  main.list-collapsed #listPanel,
+  main.desc-collapsed #descPanel { display: flex; }
+  .panel-reopen { display: none !important; }
+}
