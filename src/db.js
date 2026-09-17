@@ -287,6 +287,41 @@ export function getBrowseRows({ planSlug = null, mode = null, keyword = null, li
   return db.prepare(sql).all(...orderArgs, ...args);
 }
 
+/**
+ * 每个计划在四种抽题模式下的可用题数 —— 「从哪抽题」下拉里括号的数字靠它。
+ *
+ * 下拉里每个计划的括号必须跟着「抽什么样的」变（选「还没做过的」就该显示剩余新题数），
+ * 否则用户会以为模式切换没生效。一条 SQL 把全部计划 × 四种模式一次算出来，
+ * 避免为每个计划各发一次请求（计划有几十个，那样会很慢）。
+ *
+ * 「全部题目」那一项不在这里 —— 它没有 plan 过滤，用 browseCounts() 单独算。
+ */
+export function planModeCounts() {
+  return getDb()
+    .prepare(
+      `SELECT pp.plan_slug AS slug,
+              COUNT(*) AS total,
+              SUM(CASE WHEN pg.lc_status = 'ac' THEN 1 ELSE 0 END) AS ac,
+              SUM(CASE WHEN pg.lc_status IS NULL OR pg.lc_status = 'not_started' THEN 1 ELSE 0 END) AS fresh,
+              SUM(CASE WHEN rv.due_date IS NOT NULL AND rv.due_date <= date('now') THEN 1 ELSE 0 END) AS due
+       FROM plan_problems pp
+       JOIN problems pr ON pr.slug = pp.problem_slug
+       LEFT JOIN progress pg ON pg.slug = pr.slug
+       LEFT JOIN reviews  rv ON rv.slug = pr.slug
+       GROUP BY pp.plan_slug`,
+    )
+    .all()
+    .map((r) => ({
+      slug: r.slug,
+      counts: {
+        all: r.total || 0,
+        new: r.fresh || 0,
+        ac: r.ac || 0,
+        due: r.due || 0,
+      },
+    }));
+}
+
 /** 当前条件下每个分类各有多少题 —— 操作条上括号里的数字靠它 */
 export function browseCounts({ planSlug = null, keyword = null } = {}) {
   const db = getDb();

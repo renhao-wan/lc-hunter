@@ -155,6 +155,11 @@ const routes = {
         source: p.source,
         ac: p.ac || 0,
       })),
+      // 每个计划在四种抽题模式下各有多少题能抽 —— 下拉里括号的数字靠它。
+      // 前端切「抽什么样的」时不用再发请求，直接从这份表里取。
+      planCounts: Object.fromEntries(
+        db.planModeCounts().map((x) => [x.slug, x.counts]),
+      ),
       kamaIndexed: db.countKamaProblems(),
     };
   },

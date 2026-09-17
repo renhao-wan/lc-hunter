@@ -102,12 +102,13 @@
   </section>
 
   <!-- 右：编辑器 + 运行 -->
-  <section class="panel code-panel">
+  <section class="panel code-panel" id="codePanel">
     <div class="panel-head">
       <div id="fileTabs" class="tabs"></div>
       <div class="head-actions">
         <button id="saveBtn" class="ghost" title="Ctrl+S">保存</button>
         <button id="runBtn" class="primary" title="Ctrl+Enter">运行</button>
+        <button class="ghost icon collapse-btn" id="collapseCode" title="收起代码区">»</button>
       </div>
     </div>
     <textarea id="editor" spellcheck="false" placeholder="还没有代码。抽一道题后点「准备工作区」，会自动生成 Solution.java 等文件。"></textarea>
@@ -145,9 +146,11 @@
         <div id="myPlansList" class="plan-grid"></div>
       </section>
 
-      <section class="plans-section">
+      <section class="plans-section" id="allPlansSection">
         <div class="section-head">
-          <h4>全部计划 <span class="muted small">（免登录可用，点「同步」拉进本地）</span></h4>
+          <h4 class="sec-toggle" id="allPlansToggle" title="点击收起 / 展开这一节">
+            <span class="caret">▾</span>全部计划 <span class="muted small">（免登录可用，点「同步」拉进本地）</span>
+          </h4>
           <input id="planSearch" type="search" placeholder="筛选计划">
         </div>
         <div id="allPlansList" class="plan-grid"></div>

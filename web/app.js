@@ -171,15 +171,38 @@ function renderBindButton(s) {
   }
 }
 
-/** 顶栏的抽题范围下拉 */
+/**
+ * 顶栏的抽题范围下拉。
+ *
+ * 每个计划后面的括号跟着「抽什么样的」走 —— 选「还没做过的」就显示这个计划剩多少新题，
+ * 选「今天该复习的」就显示今天到期几道。数字来自 /api/state 里的 planCounts，
+ * 切模式时不用再发请求，直接重渲染选项即可。
+ *
+ * 「全部题目」那一项没有计划过滤，用当前已拉到的 total 兜底显示。
+ */
 function renderPlanSelect(plans) {
   const sel = $('planSel');
   const prev = sel.value;
   const mine = plans.filter((p) => p.source === 'mine');
   const rest = plans.filter((p) => p.source !== 'mine');
-  const opt = (p) => `<option value="${esc(p.slug)}">${esc(p.name)}（${p.count}）</option>`;
+
+  const mode = $('modeSel')?.value || 'all';
+  const counts = lastState?.planCounts || {};
+  const nOf = (slug) => {
+    const c = counts[slug];
+    if (!c) return null;
+    return c[mode] ?? c.all ?? null;
+  };
+
+  const opt = (p) => {
+    const n = nOf(p.slug);
+    return `<option value="${esc(p.slug)}">${esc(p.name)}（${n == null ? p.count : n}）</option>`;
+  };
+
+  // 「全部题目」括号里也给个数，否则它看起来像唯一没有信息的选项
+  const allCount = state?.stats?.problems ?? '';
   sel.innerHTML =
-    '<option value="">全部题目</option>' +
+    `<option value="">全部题目${allCount === '' ? '' : `（${allCount}）`}</option>` +
     (mine.length ? `<optgroup label="我加入的">${mine.map(opt).join('')}</optgroup>` : '') +
     (rest.length ? `<optgroup label="已同步的计划">${rest.map(opt).join('')}</optgroup>` : '');
   if (prev && plans.some((p) => p.slug === prev)) sel.value = prev;
@@ -400,6 +423,8 @@ async function openProblem(slug, el) {
     // 有题了就把引导收起来，换成题面。题面默认折叠，短题自动不显示展开按钮
     showDesc();
     applyDescClamp(false);
+    // 这道题有工作区就展开代码区，没有就继续保持收起 —— 不用用户手动管
+    if (!localStorage.getItem('lc-code-lock')) applyCollapse();
   } catch (e) {
     toast(e.message, 'err');
   }
@@ -612,6 +637,9 @@ async function doGen() {
   try {
     const r = await api('/api/gen', { method: 'POST', body: { slug: state.current.slug, mode: 'both', force: true } });
     toast(`已生成（ACM ${r.level}，${r.cases} 组用例）`, 'ok');
+    // 生成了工作区就该把代码区展开 —— 用户下一步就是写代码。
+    // 清除 lock，让自动判断重新接管（否则之前手动收起过就永远不弹开了）
+    localStorage.removeItem('lc-code-lock');
     await openProblem(state.current.slug, document.querySelector('.prob.active'));
   } catch (e) {
     toast(e.message, 'err');
@@ -751,11 +779,16 @@ function renderPlansModal(r) {
   renderAllPlans(r.plans);
   $('planSearch').value = '';
 
-  // 恢复「我加入的计划」的收起状态
+  // 恢复「我加入的计划」/「全部计划」两节的收起状态
   const hideMine = localStorage.getItem('lc-hide-myplans') === '1';
   $('myPlansList').hidden = hideMine;
   const caret = $('myPlansToggle').querySelector('.caret');
   if (caret) caret.textContent = hideMine ? '▸' : '▾';
+
+  const hideAll = localStorage.getItem('lc-hide-allplans') === '1';
+  $('allPlansList').hidden = hideAll;
+  const caretAll = $('allPlansToggle').querySelector('.caret');
+  if (caretAll) caretAll.textContent = hideAll ? '▸' : '▾';
 }
 
 function renderAllPlans(plans, keyword = '') {
@@ -1173,6 +1206,15 @@ $('myPlansToggle').onclick = () => {
   caret.textContent = hide ? '▸' : '▾';
   localStorage.setItem('lc-hide-myplans', hide ? '1' : '0');
 };
+// 「全部计划」整节也可收起（计划有几十个，滚动很长）
+$('allPlansToggle').onclick = () => {
+  const box = $('allPlansList');
+  const caret = $('allPlansToggle').querySelector('.caret');
+  const hide = !box.hidden;
+  box.hidden = hide;
+  caret.textContent = hide ? '▸' : '▾';
+  localStorage.setItem('lc-hide-allplans', hide ? '1' : '0');
+};
 // 计划卡片上的按钮用事件委托 —— 卡片是动态渲染的，逐个绑定会在重渲染后失效
 $('plansModal').addEventListener('click', (e) => {
   const sync = e.target.closest('.sync-1');
@@ -1199,6 +1241,9 @@ $('filterSel').onchange = loadProblems;
 $('modeSel').onchange = () => {
   const m = $('modeSel').value;
   $('filterSel').value = m === 'all' ? '' : m;
+  // 下拉里每个计划的括号数字也要跟着换，否则会出现
+  // 「选了『还没做过的』但括号还是计划总题数」这种对不上的情况
+  renderPlanSelect(lastState?.plans || []);
   loadProblems();
 };
 $('scopeClear').onclick = () => {
@@ -1218,7 +1263,6 @@ function applyCollapse() {
   const desc = localStorage.getItem('lc-collapse-desc') === '1';
   const main = $('mainArea');
   $('reopenList').hidden = !list;
-
   /*
    * 题面把手是动态建的一次性元素。
    *
@@ -1243,9 +1287,42 @@ function applyCollapse() {
   }
   reopenDesc.hidden = !desc;
 
+  /*
+   * 代码区（工作区）折叠。
+   *
+   * 和左栏/题面不同，这一栏的收起是「自动」的：没生成工作区时它本来就空着，
+   * 占一整列只是浪费空间（用户反馈：默认没有工作区时可以不显示）。
+   * 一旦点了「准备工作区」，就自动展开 —— 那时候用户正要写代码。
+   *
+   * 手动点击把手也能压过自动判断（codeLock 记用户的显式选择），
+   * 否则用户手动收起后一切题又被强行弹开，很烦。
+   */
+  let reopenCode = $('reopenCode');
+  if (!reopenCode) {
+    reopenCode = document.createElement('button');
+    reopenCode.id = 'reopenCode';
+    reopenCode.className = 'panel-reopen';
+    reopenCode.title = '展开代码区';
+    reopenCode.textContent = '代码 ›';
+    reopenCode.onclick = () => {
+      localStorage.setItem('lc-collapse-code', '0');
+      localStorage.setItem('lc-code-lock', '1');
+      applyCollapse();
+    };
+    reopenDesc.after(reopenCode);
+  }
+
+  const hasWorkspace = (state.current?.files || []).length > 0;
+  const locked = localStorage.getItem('lc-code-lock') === '1';
+  // 没工作区 → 默认收起；有工作区 → 默认展开。用户手动改过就听用户的
+  const code = locked ? localStorage.getItem('lc-collapse-code') === '1' : !hasWorkspace;
+
+  reopenCode.hidden = !code;
+
   // class 最后加，避免布局闪一下
   main.classList.toggle('list-collapsed', list);
   main.classList.toggle('desc-collapsed', desc);
+  main.classList.toggle('code-collapsed', code);
 }
 
 $('collapseList').onclick = () => {
@@ -1259,6 +1336,11 @@ $('reopenList').onclick = () => {
 };
 $('collapseDesc').onclick = () => {
   localStorage.setItem('lc-collapse-desc', '1');
+  applyCollapse();
+};
+$('collapseCode').onclick = () => {
+  localStorage.setItem('lc-collapse-code', '1');
+  localStorage.setItem('lc-code-lock', '1');
   applyCollapse();
 };
 $('reviewBox').onclick = (e) => {

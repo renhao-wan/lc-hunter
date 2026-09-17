@@ -327,9 +327,16 @@ main.list-collapsed { grid-template-columns: 40px minmax(300px, 1fr) minmax(380p
 main.desc-collapsed { grid-template-columns: 290px 40px minmax(380px, 1fr); }
 main.list-collapsed.desc-collapsed { grid-template-columns: 40px 40px minmax(380px, 1fr); }
 
+/* 工作区还没生成时，右栏也收成一条窄栏 —— 空编辑器占一整列没有意义 */
+main.code-collapsed { grid-template-columns: 290px minmax(300px, 1fr) 40px; }
+main.list-collapsed.code-collapsed { grid-template-columns: 40px minmax(300px, 1fr) 40px; }
+main.desc-collapsed.code-collapsed { grid-template-columns: 290px minmax(300px, 1fr) 40px; }
+main.list-collapsed.desc-collapsed.code-collapsed { grid-template-columns: 40px minmax(300px, 1fr) 40px; }
+
 /* 收起的那一栏整个让位，格子交给展开把手 */
 main.desc-collapsed #descPanel { display: none; }
 main.list-collapsed #listPanel { display: none; }
+main.code-collapsed .code-panel { display: none; }
 
 /* 收起后留下的展开把手，竖排显示 */
 .panel-reopen {
@@ -361,6 +368,7 @@ main.list-collapsed #listPanel { display: none; }
  */
 #reopenList { grid-column: 1; grid-row: 1; }
 #reopenDesc { grid-column: 1; grid-row: 1; }
+#reopenCode { grid-column: 1; grid-row: 1; }
 
 /* 只收起左栏：题面把手回到中栏位置（第 2 列） */
 main.list-collapsed:not(.desc-collapsed) #reopenDesc { grid-column: 2; grid-row: 1; }
@@ -369,6 +377,15 @@ main.desc-collapsed:not(.list-collapsed) #reopenDesc { grid-column: 2; grid-row:
 /* 两个都收起：左栏把手第 1 列，题面把手第 2 列 */
 main.list-collapsed.desc-collapsed #reopenList { grid-column: 1; grid-row: 1; }
 main.list-collapsed.desc-collapsed #reopenDesc { grid-column: 2; grid-row: 1; }
+
+/*
+ * 代码区把手：它固定在最后一列，位置不随左栏/题面是否收起而变。
+ * 但题面把手在「只收起题面」时也要占第 2 列 —— 两者不冲突，
+ * 因为题面收起时第 2 列空着，而代码区把手始终在第 3 列。
+ */
+#reopenCode { grid-column: 3; grid-row: 1; }
+/* 题面也收起时，第 2 列让给题面把手，代码区把手仍在第 3 列 */
+main.desc-collapsed #reopenCode { grid-column: 3; grid-row: 1; }
 
 /* ---------------- 空状态 ---------------- */
 /*
@@ -797,14 +814,15 @@ button.small-btn { padding: 5px 12px; font-size: 12px; }
   font-size: 13px;
   font-weight: 600;
 }
-.section-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
+.section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .section-head h4 { margin: 0; }
 .section-head input { margin-left: auto; width: 200px; font-size: 12px; }
+/*
+ * 「全部计划」的标题本身是 .sec-toggle（可点收起）。
+ * 它在 flex 行里要让出空间给右侧搜索框 —— 不给 flex:1 的话
+ * 搜索框的 margin-left:auto 会失效，两者挤在一起。
+ */
+.section-head > .sec-toggle { flex: 1; min-width: 0; margin: 0; }
 
 /* 「我加入的计划」标题也可折叠，和下面的分类标题保持一致的手感 */
 .sec-toggle {
@@ -1161,11 +1179,39 @@ button.big {
   /* 展开按钮贴到面板底部，不随内容高度浮动，视线位置更稳 */
   .desc-foot { padding: 6px 18px 10px; border-top: 1px solid var(--border); }
 
-  /* 并排布局下没有位置塞把手，取消收起态，避免把手孤零零占一格 */
+  /*
+   * 并排布局下没有位置塞把手，取消左栏/题面的收起态（把手会孤零零占一格）。
+   * 代码区不同 —— 它在这一段里占的是第二行，所以它的收起改成收行高，见下。
+   * 注意必须把 code-collapsed 系列的三列声明一并压掉，
+   * 否则桌面那套 grid-template-columns 会漏过来，右边留一条 40px 空缝。
+   */
   main.list-collapsed,
   main.desc-collapsed,
-  main.list-collapsed.desc-collapsed { grid-template-columns: 220px minmax(0, 1fr); }
+  main.list-collapsed.desc-collapsed,
+  main.code-collapsed,
+  main.list-collapsed.code-collapsed,
+  main.desc-collapsed.code-collapsed,
+  main.list-collapsed.desc-collapsed.code-collapsed {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
   main.list-collapsed #listPanel,
   main.desc-collapsed #descPanel { display: flex; }
   .panel-reopen { display: none !important; }
+
+  /*
+   * 代码区在窄屏占的是第二行（整行铺满），所以「收起工作区」要收的是行高而不是列宽。
+   * 收成 40px 的行，把手是横向的（这段布局里 writing-mode 会显得别扭），
+   * 所以单独把代码区把手恢复成横排。
+   */
+  main.code-collapsed { grid-template-rows: 1fr 40px; }
+  main.code-collapsed .code-panel { display: none; }
+  main.code-collapsed #reopenCode {
+    display: block !important;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    writing-mode: horizontal-tb;
+    padding: 4px 12px;
+    text-align: left;
+    align-self: stretch;
+  }
 }
