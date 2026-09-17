@@ -4,6 +4,10 @@
 
 当前语言只做 **Java**，但语言差异全部收敛在 `LanguageProfile` 接口后面，加一门新语言只需新增一个 profile（见下）。
 
+> 仓库：<https://github.com/renhao-wan/lc-hunter>
+>
+> 运行环境：Node 22+（用到 `node:sqlite`）、JDK 17+。**零 npm 依赖**，不需要 `npm install` 也没有构建步骤。
+
 ---
 
 ## 快速开始
@@ -218,3 +222,50 @@ bin/lc.js             启动器（屏蔽 SQLite 实验警告）
 - 期望输出是从题面"输入：/输出："里抽的（力扣 API 只给输入不给输出），题面格式特殊的题可能抽不到，会退回只冒烟
 - 用例比对对数值有 1e-6 容差；空串和 `null` 不参与数值比较
 - 每个用例跑一次 JVM，约 300-500ms（javac 只编译一次，已经省了大头）
+- 卡码网映射表目前只有 5 条人工绑定，其余题目走 metaData 自动生成
+
+---
+
+## 不会进版本库的东西
+
+`.gitignore` 有意排除以下几类，clone 之后目录里看不到它们 —— 这是正常的，首次运行时自动生成：
+
+| 路径 | 是什么 | 为什么排除 |
+| --- | --- | --- |
+| `.lc/credentials.json` | 力扣登录 Cookie（`LEETCODE_SESSION`） | 等同密码，泄露等于交出账号 |
+| `.lc/lc-hunter.db*` | 本地 SQLite（题目/进度/复习记录） | 个人做题数据，且体积大 |
+| `workspace/` | 抽题生成的工作区 | 含 LeetCode 版权题面、个人解答、平台相关的 `.class` |
+| `test/**_shot*.png` 等 | 界面验收截图与结果 JSON | 每次跑都不一样 |
+
+`test/` 下的 `_verify-*.js` / `probe-*.js` **会**提交 —— 那是可复用的验收脚本（见下面「界面验收」）。
+
+```bash
+lc bind        # 重新写入凭据（会提示怎么从浏览器取 Cookie）
+lc sync        # 重建数据库
+lc draw --gen  # 重新生成工作区
+```
+
+---
+
+## 界面验收
+
+项目里没有测试框架（零依赖原则），界面验证靠一组自写的 CDP 脚本 —— 用 Node 22 原生 `WebSocket` 直连 Chrome 的 DevTools 协议，不装 Playwright。
+
+```bash
+# 先起服务
+node bin/lc.js ui
+
+# 另开一个终端
+node test/_verify-ui.js          # 主题色值 / DOM 状态 / 截图
+node test/_verify-collapse.js    # 四种栏位折叠组合的布局
+node test/_verify-hidden.js      # 折叠元素的 offsetHeight（期望 0）
+node test/_verify-responsive.js  # 四视口布局 + 按钮是否真在视口内
+node test/smoke.js               # 接口冒烟
+```
+
+结果落在 `test/_verify*.json` 和各 `_*.png` 截图（print 到 stdout 的标记行是 `*_DONE`）。
+
+两个容易踩的坑：
+
+- **折叠类改动量 `offsetHeight`**，不要只看 `hidden` 属性和 `display` —— 父级 grid 的行列定义仍可能让它占位。
+- **高度分配类改动必须多视口验证**。判断标准是 `getBoundingClientRect()` 的 `top/bottom` 是否真落在 `window.innerHeight` 内：元素可以在 DOM 里、高度也不为 0，却被 `body { overflow: hidden }` 裁到屏幕外。
