@@ -4,15 +4,66 @@
   "description": "力扣刷题辅助：学习计划加权抽题 + 间隔复习 + 核心/ACM 双模式（本地可编译运行）",
   "type": "module",
   "private": true,
+  "main": "electron/main.js",
   "bin": {
     "lc": "bin/lc.js"
   },
   "scripts": {
     "lc": "node --disable-warning=ExperimentalWarning bin/lc.js",
-    "start": "node --disable-warning=ExperimentalWarning bin/lc.js"
+    "start": "node --disable-warning=ExperimentalWarning bin/lc.js",
+    "ui": "node --disable-warning=ExperimentalWarning bin/lc.js ui",
+    "app": "electron .",
+    "dist": "electron-builder --win",
+    "dist:all": "electron-builder -mwl"
   },
   "engines": {
     "node": ">=22.5.0"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.lchunter.app",
+    "productName": "lc-hunter",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "web/**/*",
+      "bin/**/*",
+      "package.json",
+      "README.md"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Development"
+    }
+  }
 }

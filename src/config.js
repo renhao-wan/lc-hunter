@@ -4,7 +4,22 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export const PROJECT_ROOT = path.resolve(__dirname, '..');
+/**
+ * 数据根目录 —— .lc/（配置、凭据、SQLite）和 workspace/ 都挂在它下面。
+ *
+ * 默认是「src/ 的上一级」，也就是项目目录，命令行模式下一切照旧。
+ *
+ * 但打成桌面应用（Electron）之后，代码被封进只读的 app.asar，
+ * 这时 `path.resolve(__dirname, '..')` 会落在 asar 内部 —— 一写就炸。
+ * 所以留一个环境变量出口：Electron 主进程在加载任何业务模块之前，
+ * 把 LC_HOME 指到 app.getPath('userData')（一个肯定可写的目录）。
+ *
+ * 注意顺序：这个常量在模块初始化时就算好了，所以 LC_HOME 必须在
+ * 第一次 import 本文件之前设好 —— 见 electron/main.js 里的动态 import。
+ */
+export const PROJECT_ROOT = process.env.LC_HOME
+  ? path.resolve(process.env.LC_HOME)
+  : path.resolve(__dirname, '..');
 export const DATA_DIR = path.join(PROJECT_ROOT, '.lc');
 export const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
 const CRED_PATH = path.join(DATA_DIR, 'credentials.json');

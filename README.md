@@ -58,6 +58,42 @@ lc ui --port 8080      # 换端口
 lc ui --no-open        # 不自动开浏览器
 ```
 
+## 桌面应用（Electron）
+
+除了在浏览器里用，也能打包成独立窗口应用：
+
+```bash
+npm install            # 首次需要（electron 二进制较大，约 100MB）
+npm run app            # 开发模式，直接开一个桌面窗口
+npm run dist           # 打包 Windows 安装包到 dist/
+```
+
+主进程只做三件事：起本地服务 → 开窗口 → 加载 `http://127.0.0.1:<随机端口>`。
+**界面和内核之间本来就是 HTTP，所以 `src/` 和 `web/` 一行都不用改** ——
+这也是当初不做 IPC 架构的原因。
+
+#### 打包后数据放哪
+
+代码进了只读的 `app.asar`，数据不能跟着进。所以主进程在加载业务模块之前
+先把环境变量 `LC_HOME` 指向 `app.getPath('userData')`：
+
+| 平台 | 位置 |
+| --- | --- |
+| Windows | `%APPDATA%\lc-hunter\` |
+| macOS | `~/Library/Application Support/lc-hunter/` |
+| Linux | `~/.config/lc-hunter/` |
+
+配置、登录凭据、SQLite 数据库和生成的工作区都在那里。
+**顺序是硬要求**：`src/config.js` 在模块初始化时就把路径算死了，
+所以 `LC_HOME` 必须在第一次 import 它之前设好 —— 这就是
+`electron/main.js` 里用动态 `import()` 而不是静态 import 的原因。
+
+#### 依赖边界
+
+`dependencies` 仍然保持**空**。electron / electron-builder 只在
+`devDependencies` 里，它们是打包壳，不参与业务运行时 ——
+「零第三方依赖」说的是业务逻辑不建在别人库上，不是连构建工具都不能有。
+
 三栏布局：**题目列表 / 题面 / 编辑器 + 运行结果**。
 
 - 顶栏选学习计划 + 抽题模式（全部 / 没做的 / 已 AC / 到期复习）+ 抽几题，点「随机抽题」，抽中后自动生成工作区并打开
