@@ -4,7 +4,7 @@
   "description": "力扣刷题辅助：学习计划加权抽题 + 间隔复习 + 核心/ACM 双模式（本地可编译运行）",
   "type": "module",
   "private": true,
-  "main": "electron/main.js",
+  "main": "electron/main.cjs",
   "bin": {
     "lc": "bin/lc.js"
   },
