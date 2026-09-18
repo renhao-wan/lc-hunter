@@ -86,7 +86,38 @@ npm run dist           # 打包 Windows 安装包到 dist/
 配置、登录凭据、SQLite 数据库和生成的工作区都在那里。
 **顺序是硬要求**：`src/config.js` 在模块初始化时就把路径算死了，
 所以 `LC_HOME` 必须在第一次 import 它之前设好 —— 这就是
-`electron/main.js` 里用动态 `import()` 而不是静态 import 的原因。
+`electron/main.cjs` 里用动态 `import()` 而不是静态 import 的原因。
+
+（入口是 `.cjs` 而不是 `.js`：项目 `package.json` 是 `"type": "module"`，
+而 **Electron 的内置模块在 ESM 下拿不到命名导出** —— `import { app } from 'electron'`
+会报 `does not provide an export named 'BrowserWindow'`，因为 ESM 侧解析到的是
+node_modules 里那个"导出 exe 路径字符串"的包。只有 CommonJS 的 `require` 才拿到注入好的运行时。
+业务模块仍是 ESM，靠动态 `import()` 加载。）
+
+#### 界面是为桌面写的，不是"网页套壳"
+
+工具栏只有四件事：应用标识、学习计划、统计、设置。**账号绑定、数据位置、
+计划导入这些"配置一次就很少再动"的东西全在设置里**，不占工具栏 ——
+第一次打开的人不该以为"必须先登录才能用"。
+
+设置做成「左分类 + 右内容」的分栏窗口（系统偏好设置那种），不是网页式的一长条：
+
+| 分类 | 内容 |
+| --- | --- |
+| 账号 | 绑定 / 换账号 / 解绑；说明登录后会自动导入计划 |
+| 学习计划 | 导入我加入的计划、导入精选计划、同步刷题状态、「打开时自动同步」开关 |
+| 数据 | 工作区与数据目录的**真实路径** + 「打开」按钮（在系统文件管理器里打开） |
+| 外观 | 跟随系统 / 深色 / 浅色（默认跟随系统） |
+| 关于 | 版本、运行方式（桌面应用 / 浏览器）、Electron · Node · 平台 |
+
+**登录了就不用再手动导入计划**：绑上账号直接拉「我加入的计划」，接着补一次刷题状态；
+启动时若本地一个计划都没有、或状态快照超过 6 小时，也会静默补一次
+（不做成每次开机全量刷 —— 刷题状态一次要跑 50 秒）。
+设置里的手动入口还在，但正常路径不该用到它。
+
+图标由 `tools/gen-icon.js` 生成（`npm run icons`）：用 `node:zlib` 手写 PNG 编码，
+再包成 ICO / ICNS 容器 —— **没有为了一个图标去装 sharp / pngjs / to-ico**。
+改图标改脚本里的几何常量重跑即可，产物 `assets/` 和 `build/` 都进版本库。
 
 #### 依赖边界
 
@@ -133,11 +164,28 @@ npm run dist           # 打包 Windows 安装包到 dist/
 展开把手的内容用 `justify-content:center` 在整条竖栏里居中
 （以前贴着顶部，850px 高的竖栏里内容挤在最上面）。
 
-### 为什么是本地 Web 而不是 Electron
+### 为什么最后还是套了 Electron
 
-项目原则是**零 npm 依赖**（数据库用 `node:sqlite`，HTTP 用 `node:http`）。Electron 要拉 ~150MB 二进制，
-和这个原则冲突。现在的做法是纯 Node 本地服务 + 浏览器 UI，**内核一行没动**；
-真要做成 `.exe` 桌面端，后面套一层 Electron/Tauri 壳即可。
+内核一直是「纯 Node 本地服务 + 前端页面」，界面和内核之间**只有 HTTP**。
+这是刻意的：它让桌面壳变成可以随时加上去的薄层，而不是一次架构改造。
+
+（早期版本这里写的是"不做 Electron"，理由是 Electron 要拉 ~150MB 二进制、
+和零 npm 依赖冲突。这个判断在**业务依赖**上依然成立 —— `dependencies` 至今是空的，
+electron 只躺在 devDependencies 里；工具壳的重量没有传导到业务代码上。）
+
+套壳后真正需要适配打包环境的只有**一处**：数据目录（见上面「打包后数据放哪」）。
+桌面端和浏览器端的其余差别全部收在 `electron/main.cjs`，`src/` 与 `web/` 不感知：
+
+| 差别 | 落在哪 |
+| --- | --- |
+| 数据目录改到 userData | 主进程设 `LC_HOME`（import 业务模块之前） |
+| 菜单栏整条移除 | `Menu.setApplicationMenu(null)`，macOS 保留最小集 |
+| 关开发者工具 + 拦 F12 / Ctrl+Shift+I / Ctrl+R | `webPreferences.devTools` + `before-input-event` |
+| 窗口与任务栏图标 | BrowserWindow `icon` + electron-builder 的 `build/icon.ico` |
+| 外链（题面里的力扣链接） | `setWindowOpenHandler` / `will-navigate` 转系统浏览器 |
+
+后端靠 `LC_DESKTOP=1` 知道自己在桌面壳里，只影响「关于」页显示什么；
+`GET /api/env` 里的 `desktop` 字段就是它。
 
 服务只监听 `127.0.0.1` —— 本地工具不该在局域网里裸奔。API 按域拆在 `src/routes/*.js`（骨架在 `src/http.js`）：
 
@@ -153,7 +201,17 @@ npm run dist           # 打包 Windows 安装包到 dist/
 | POST | `/api/review` | 记录复习质量，排下次时间 |
 | GET | `/api/kama/search` | 按题名匹配卡码网候选 |
 | POST | `/api/kama/bind` / `unbind` | 绑定/解绑卡码网 IO（含结构校验） |
+| GET | `/api/plans` | 学习计划广场（全部计划 + 我加入的） |
+| POST | `/api/plans/sync` | 同步计划：`{mine:true}` 拉我加入的，空 body 拉内置精选 |
+| GET | `/api/plans/detail?slug=` | 计划内的题目列表 |
 | POST | `/api/sync` | 同步题目目录 / 题单 / 详情 |
+| POST/GET | `/api/sync/status` | 起「同步刷题状态」后台任务 / 轮询它的进度 |
+| GET | `/api/env` | 目录位置、版本、是否跑在桌面壳里 |
+| POST | `/api/open-folder` | 在系统文件管理器里打开工作区或数据目录 |
+| GET | `/api/bind/capability` | 探测可用浏览器 + 当前登录账号 |
+| POST | `/api/login/browser` | 弹浏览器登录并抓 Cookie |
+| GET | `/api/login/status` | 登录进度（界面轮询用） |
+| POST | `/api/unbind` | 解绑（删除本地凭据） |
 
 ---
 
@@ -272,10 +330,17 @@ src/
     kama.js           卡码网绑定（搜索 / 绑定 / 解绑）
     account.js        账号（一键登录 / 进度 / 能力自检 / 解绑）
     sync.js           数据同步
+    settings.js       运行环境信息（目录位置/版本）与打开目录
 web/
-  index.html          界面骨架
-  style.css           主题变量（深浅色）
+  index.html          界面骨架（含设置面板）
+  style.css           主题变量（深浅色）+ 桌面化组件
   app.js              原生 JS，无框架无构建
+  favicon.png         图标（由 tools/gen-icon.js 生成，别手改）
+electron/
+  main.cjs            桌面主进程（起服务 / 开窗口 / 去菜单栏 / 图标）
+tools/gen-icon.js     图标生成器（node:zlib 手写 PNG → ICO/ICNS）
+assets/icon.png       窗口图标母版
+build/                electron-builder 用的图标（icon.ico / icon.icns / icon.png）
 bin/lc.js             启动器（屏蔽 SQLite 实验警告）
 ```
 
@@ -395,16 +460,28 @@ CLI 的 `lc bind` 与界面上的按钮走的是同一套代码。
 node bin/lc.js ui
 
 # 另开一个终端
-node test/_verify-ui.js          # 主题色值 / DOM 状态 / 截图
-node test/_verify-collapse.js    # 四种栏位折叠组合的布局
-node test/_verify-hidden.js      # 折叠元素的 offsetHeight（期望 0）
-node test/_verify-responsive.js  # 四视口布局 + 按钮是否真在视口内
-node test/smoke.js               # 接口冒烟
+node test/_verify-ui.js             # 主题色值 / DOM 状态 / 截图
+node test/_verify-collapse.js       # 四种栏位折叠组合的布局
+node test/_verify-hidden.js         # 折叠元素的 offsetHeight（期望 0）
+node test/_verify-responsive.js     # 四视口布局 + 按钮是否真在视口内
+node test/_verify-bind-ui.js        # 绑定界面（设置 → 账号）
+node test/_verify-bind-nobrowser.js # 没有浏览器时的引导
+node test/_verify-auto-import.js    # 登录后自动导入学习计划的编排
+node test/_shot-desktop.js          # 顶栏 + 设置五个分类的截图
+node test/smoke.js                  # 接口冒烟
 ```
 
-结果落在 `test/_verify*.json` 和各 `_*.png` 截图（print 到 stdout 的标记行是 `*_DONE`）。
+结果落在 `test/_verify*.json` 和各 `_*.jpg` 截图（print 到 stdout 的标记行是 `*_DONE`）。
 
-两个容易踩的坑：
+三个容易踩的坑：
 
 - **折叠类改动量 `offsetHeight`**，不要只看 `hidden` 属性和 `display` —— 父级 grid 的行列定义仍可能让它占位。
 - **高度分配类改动必须多视口验证**。判断标准是 `getBoundingClientRect()` 的 `top/bottom` 是否真落在 `window.innerHeight` 内：元素可以在 DOM 里、高度也不为 0，却被 `body { overflow: hidden }` 裁到屏幕外。
+- **截图存 JPEG，不要存 PNG**。读完 PNG 再用同路径截图会被"内容相同"判定命中缓存，
+  拿到的还是改动前那张图，很容易得出"改动没生效"的错误结论（踩过一次：以为深色主题没生效，
+  其实 `getComputedStyle` 已经是 `rgb(22,22,22)`，只有图是旧的）。
+
+另一个和 Electron 有关的坑：**沙箱/CI 里跑桌面端要 `--disable-gpu`**，无显示环境下
+GPU 进程会反复崩到 `FATAL: GPU process isn't usable`；真实桌面环境不需要。
+另外如果环境里设了 `ELECTRON_RUN_AS_NODE=1`，Electron 会退化成纯 Node（`app` 直接是
+`undefined`），spawn 时要把这个变量删掉。

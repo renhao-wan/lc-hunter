@@ -107,12 +107,11 @@ await evaluate(`
   })()
 `);
 
-// 重新走一遍打开弹窗的流程（会重新拉 capability）
+// 重新走一遍打开绑定界面的流程（会重新拉 capability）。
+// 绑定 UI 已经从顶栏按钮搬进设置的「账号」页，入口随之变成设置面板
 const opened = await evaluate(`
   (async () => {
-    const btn = document.getElementById('bindBtn');
-    if (btn) btn.click();
-    else { document.getElementById('bindModal').hidden = false; if (window.loadBind) await window.loadBind(); }
+    await openSettings('account');
     await new Promise(r => setTimeout(r, 1500));
     return 'ok';
   })()
@@ -120,9 +119,12 @@ const opened = await evaluate(`
 
 const r = await evaluate(`
   (() => {
-    const modal = document.getElementById('bindModal');
+    const modal = document.getElementById('settingsModal');
     const scope = modal || document;
-    const fields = scope.querySelectorAll('input, textarea');
+    // 只统计"要用户填东西"的输入框。设置面板里的开关是 checkbox，不算
+    const fields = [...scope.querySelectorAll('input, textarea')].filter(
+      (f) => !['checkbox', 'radio'].includes(f.type),
+    );
     const bio = document.getElementById('bindBrowserInfo');
     const login = document.getElementById('bindLogin');
     const text = modal ? modal.innerText : '';

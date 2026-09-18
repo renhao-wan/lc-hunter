@@ -85,25 +85,55 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 16px;
-  height: 50px;
+  gap: 8px;
+  padding: 0 12px;
+  /* 46px：桌面应用的工具栏高度。原来的 50px 加上底下那条 56px 的操作条，
+     顶部光"框"就占掉 106px，窗口一小就只剩题面了 */
+  height: 46px;
   background: var(--bg-chrome);
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-chrome);
   flex-shrink: 0;
   position: relative;
   z-index: 3;
+  /* 工具栏属于"窗口装饰"，不是内容：拖选出一片蓝没有任何意义 */
+  user-select: none;
 }
 
 .brand {
-  font-weight: 600;
-  font-size: 16px;
-  letter-spacing: -.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-right: 6px;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -.2px;
   color: var(--text);
 }
-.brand span { color: var(--accent); font-weight: 600; }
+.brand-mark {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+.brand-text span { color: var(--accent); font-weight: 600; }
+
+/* 顶栏里的图标按钮：方形、居中，和文字按钮一样高 */
+button.ghost.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ico {
+  display: block;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .spacer { flex: 1; }
 
@@ -1413,3 +1443,144 @@ button.big {
   }
   main.code-collapsed #reopenCode .reopen-label { writing-mode: horizontal-tb; }
 }
+
+/* ---------------- 设置 ---------------- */
+/*
+ * 设置用「左分类 + 右内容」的分栏，尺寸固定。
+ *
+ * 网页上的设置常常是一长条往下滚，桌面端的习惯是系统偏好设置那种分栏：
+ * 内容多了不会把弹窗撑变形，切分类也不用滚回去找位置。
+ * 账号、数据位置、计划导入这些"配置一次就很少再动"的东西全在这一处，
+ * 工具栏上不再摆它们。
+ */
+.settings-card {
+  width: min(880px, 94vw);
+  height: min(620px, 88vh);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.settings-body { display: flex; flex: 1; min-height: 0; }
+
+.settings-nav {
+  width: 150px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-sunken);
+}
+.nav-item {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+.nav-item:hover { background: var(--bg-elev); color: var(--text); }
+.nav-item.is-active {
+  background: var(--bg-panel);
+  border-color: var(--border);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.settings-panes { flex: 1; min-width: 0; overflow: auto; padding: 6px 22px 22px; }
+.settings-pane { display: none; }
+.settings-pane.is-active { display: block; }
+
+/* 一行设置：左标题、右值/控件，中间一条细分隔线 */
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.set-label { color: var(--text); flex-shrink: 0; }
+.set-hint { display: block; margin-top: 2px; font-size: 12px; color: var(--text-dim); }
+.set-text { display: flex; flex-direction: column; min-width: 0; }
+.set-value {
+  margin-left: auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+/*
+ * 路径单独排版：等宽字体、允许从中间断行。
+ * 工作区路径能长到 "C:\Users\xxx\AppData\Roaming\lc-hunter\workspace"，
+ * 用省略号截断的话用户既看不到盘符也看不清末级目录名，等于没显示。
+ */
+.set-value.path {
+  max-width: 62%;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+.set-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 2px; }
+.set-lead { margin: 4px 0 12px; font-size: 13px; line-height: 1.65; color: var(--text-dim); }
+.switch-row { cursor: pointer; }
+
+/* 开关：自绘，原生 checkbox 在深色主题下是一块不听话的白方块 */
+.switch {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 38px;
+  height: 22px;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  background: var(--bg-elev);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform .15s, background .15s;
+}
+.switch:checked { background: var(--accent-dim); border-color: var(--accent); }
+.switch:checked::after { transform: translateX(16px); background: var(--accent); }
+
+/* 分段选择（主题） */
+.seg {
+  display: inline-flex;
+  margin-left: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.seg button {
+  padding: 5px 12px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button:hover { background: var(--bg-elev); color: var(--text); }
+.seg button.is-active { background: var(--accent); color: #1a1a1a; font-weight: 500; }
+
+/* 关于 */
+.about-head { display: flex; align-items: center; gap: 12px; padding: 6px 0 16px; }
+.about-head img { border-radius: 10px; }
+.about-name { font-size: 15px; font-weight: 600; }

@@ -1,9 +1,11 @@
 /**
- * 本地 Web 后端 —— 给 GUI 用的 JSON API。
+ * 本地 Web 后端 —— 界面与内核之间唯一的接口层。
  *
- * 为什么不是 Electron：Electron 要装 ~150MB 的二进制，而这个项目的原则是零 npm 依赖
- * （数据库用 node:sqlite，HTTP 用 node:http）。先做一个纯 Node 的本地服务 + 浏览器 UI，
- * 内核完全不动；真要打包成 .exe 桌面端，后面再套 Electron/Tauri 就是一层壳的事。
+ * 这个进程既是命令行 `lc ui` 的服务端，也是桌面端（Electron）窗口里那个页面的服务端。
+ * 两种模式共用同一份代码、同一个端口策略（随机端口 + 只听 127.0.0.1），
+ * 差别只在「谁来打开这个地址」——浏览器，还是 Electron 的窗口。
+ * 所以 src/ 与 web/ 不需要知道自己在被谁用；桌面相关的特殊性（图标、菜单栏、
+ * 数据目录）全部收在 electron/main.cjs 里。
  *
  * 只监听 127.0.0.1 —— 这是本地工具，不该在局域网里裸奔。
  *
@@ -21,10 +23,11 @@ import review from './routes/review.js';
 import kama from './routes/kama.js';
 import account from './routes/account.js';
 import sync from './routes/sync.js';
+import settings from './routes/settings.js';
 
 /** 把所有域的路由合并成一张 { 'METHOD /path': handler } 表 */
 function registerRoutes() {
-  return Object.assign({}, plans, problems, review, kama, account, sync);
+  return Object.assign({}, plans, problems, review, kama, account, sync, settings);
 }
 
 /** 创建 HTTP server（cli.js 里 `ui` 命令和测试都从这走） */

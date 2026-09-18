@@ -91,12 +91,12 @@ for (let i = 0; i < 40; i++) {
 }
 await sleep(1500);
 
-// 打开绑定弹窗
+// 打开绑定界面（在设置的「账号」页）
 await evaluate(`
   (async () => {
-    const btn = document.getElementById('bindBtn');
+    const btn = document.getElementById('settingsBtn');
     if (btn) btn.click();
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise(r => setTimeout(r, 1800));
     return true;
   })()
 `);

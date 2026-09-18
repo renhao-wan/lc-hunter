@@ -123,25 +123,25 @@ await evaluate(`
   true;
 `);
 
-// --- 打开绑定弹窗（走界面自己的入口，不手动拔 hidden）
+// --- 打开绑定界面（走界面自己的入口，不手动拔 hidden）。
+// 绑定 UI 在设置的「账号」页，所以入口是设置面板
 const opened = await evaluate(`
   (async () => {
-    const btn = document.getElementById('bindBtn') || document.querySelector('[data-open="bind"]');
+    const btn = document.getElementById('settingsBtn');
     if (btn) { btn.click(); }
     else {
-      // 兜底：直接调应用自己的打开函数
-      const fn = window.openBindModal || window.showBindModal;
-      if (typeof fn === 'function') fn();
+      const fn = window.openSettings;
+      if (typeof fn === 'function') await fn('account');
       else return 'no-entry';
     }
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise(r => setTimeout(r, 1800));
     return 'clicked';
   })()
 `);
 
 const modalVisible = await evaluate(`
   (() => {
-    const m = document.getElementById('bindModal');
+    const m = document.getElementById('settingsModal');
     if (!m) return false;
     return !m.hidden && getComputedStyle(m).display !== 'none';
   })()
@@ -150,9 +150,12 @@ const modalVisible = await evaluate(`
 // --- 断言
 const r = await evaluate(`
   (() => {
-    const modal = document.getElementById('bindModal');
+    const modal = document.getElementById('settingsModal');
     const scope = modal || document;
-    const fields = scope.querySelectorAll('input, textarea');
+    // 只统计"要用户填东西"的输入框：开关是 checkbox，不算
+    const fields = [...scope.querySelectorAll('input, textarea')].filter(
+      (f) => !['checkbox', 'radio'].includes(f.type),
+    );
     const text = modal ? modal.innerText : '';
     const bio = document.getElementById('bindBrowserInfo');
     const login = document.getElementById('bindLogin');

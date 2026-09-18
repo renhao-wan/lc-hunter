@@ -13,6 +13,7 @@
     "start": "node --disable-warning=ExperimentalWarning bin/lc.js",
     "ui": "node --disable-warning=ExperimentalWarning bin/lc.js ui",
     "app": "electron .",
+    "icons": "node tools/gen-icon.js",
     "dist": "electron-builder --win",
     "dist:all": "electron-builder -mwl"
   },
@@ -35,11 +36,13 @@
       "src/**/*",
       "web/**/*",
       "bin/**/*",
+      "assets/**/*",
       "package.json",
       "README.md"
     ],
     "asar": true,
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -58,10 +61,12 @@
       "createStartMenuShortcut": true
     },
     "mac": {
+      "icon": "build/icon.icns",
       "target": "dmg",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
+      "icon": "build/icon.png",
       "target": "AppImage",
       "category": "Development"
     }

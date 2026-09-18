@@ -20,6 +20,8 @@ workspace/
 #   下面这些是运行产物，每次跑都不一样
 test/_.png
 test/_*.png
+# 截图统一存 JPEG —— 同路径的 PNG 读完再截会被"内容相同"判定命中缓存（见 README）
+test/_*.jpg
 test/_*.json
 test/_*.txt
 test/_*.out.txt
@@ -35,9 +37,10 @@ test/*-err.log
 *.class
 target/
 out/
-build/
+# 注意：build/ 不在这里忽略 —— electron-builder 约定把图标等构建资源放在 build/，
+# 那是要进版本库的源文件，不是编译产物（打包产物在 dist/）
 
-# Electron 打包产物（electron-builder 输出到 dist/）
+# Electron 打包产物
 dist/
 
 # Node（本项目零依赖，但以防万一）

@@ -3,21 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>lc-hunter · 力扣刷题辅助</title>
+<!-- 标题不带后缀：桌面端的窗口标题栏直接用这个名字，加「· 力扣刷题辅助」会显得很网页 -->
+<title>lc-hunter</title>
+<link rel="icon" type="image/png" href="/favicon.png">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
+<!-- 顶栏 = 桌面应用的工具栏：左边应用标识，中间核心入口，右边状态与设置。
+     账号绑定、数据位置、计划导入这些"配置类"的入口全在设置里，不摆在工具栏上。 -->
 <header class="topbar">
-  <div class="brand">lc<span>-hunter</span></div>
+  <div class="brand">
+    <img class="brand-mark" src="/favicon.png" alt="">
+    <span class="brand-text">lc<span>-hunter</span></span>
+  </div>
 
-  <button id="plansBtn" class="ghost">选择学习计划</button>
+  <button id="plansBtn" class="ghost">学习计划</button>
 
   <div class="spacer"></div>
 
   <div id="stats" class="stats"></div>
-  <button id="bindBtn" class="ghost">绑定账号</button>
-  <button id="themeBtn" class="ghost icon" title="切换深浅色">◐</button>
+  <button id="settingsBtn" class="ghost icon" title="设置" aria-label="设置">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+    </svg>
+  </button>
 </header>
 
 <!-- 操作条：把「选范围 → 抽题 → 生成 → 运行」串成一条明确的操作线 -->
@@ -141,7 +152,8 @@
   </section>
 </main>
 
-<!-- 学习计划广场：绑定 → 选计划 → 抽计划里的题 -->
+<!-- 学习计划广场：只负责「看计划、选范围、把某个计划拉进本地」。
+     全局的同步/导入动作在设置里，这里不再重复摆一排按钮。 -->
 <div id="plansModal" class="modal" hidden>
   <div class="modal-card wide">
     <div class="modal-head">
@@ -162,7 +174,7 @@
       <section class="plans-section" id="allPlansSection">
         <div class="section-head">
           <h4 class="sec-toggle" id="allPlansToggle" title="点击收起 / 展开这一节">
-            <span class="caret"><svg class="chev to-down" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>全部计划 <span class="muted small">（免登录可用，点「同步」拉进本地）</span>
+            <span class="caret"><svg class="chev to-down" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>全部计划 <span class="muted small">（免登录可用，点卡片上的「同步」拉进本地）</span>
           </h4>
           <input id="planSearch" type="search" placeholder="筛选计划">
         </div>
@@ -172,45 +184,138 @@
 
     <div class="modal-actions">
       <span id="plansStatus" class="muted small"></span>
-      <button id="syncStatus" class="ghost" title="把力扣上的通过状态拉到本地，让「已通过」筛选和实际进度一致">同步刷题状态</button>
-      <button id="syncFeatured" class="ghost" title="一次同步内置精选计划">同步精选计划</button>
-      <button id="syncMine" class="primary">同步我加入的全部计划</button>
+      <button id="plansImport" class="ghost" title="导入与同步都在设置里">导入 / 同步…</button>
     </div>
   </div>
 </div>
 
-<!-- 绑定账号：只有一条路径 —— 弹浏览器让用户登录，自动抓 Cookie。
-     没有任何"粘贴 Cookie"的入口，用户不需要知道 Cookie 是什么。 -->
-<div id="bindModal" class="modal" hidden>
-  <div class="modal-card">
+<!-- 设置：桌面应用的样子 —— 左边分类，右边内容。
+     账号绑定、数据位置、计划导入这些"配置过去就很少再动"的东西都在这里，
+     工具栏上不再摆它们。 -->
+<div id="settingsModal" class="modal" hidden>
+  <div class="modal-card settings-card">
     <div class="modal-head">
-      <h3>绑定力扣账号</h3>
-      <button id="bindCancel" class="ghost">关闭</button>
+      <h3>设置</h3>
+      <button id="settingsClose" class="ghost">关闭</button>
     </div>
 
-    <div class="modal-body">
-      <div id="bindMain">
-        <p class="bind-lead" id="bindLead">点下面按钮，会弹出一个小窗口让你登录力扣。登录成功就自动完成绑定，不需要手动复制任何东西。</p>
+    <div class="settings-body">
+      <nav class="settings-nav" id="settingsNav">
+        <button class="nav-item is-active" data-pane="account">账号</button>
+        <button class="nav-item" data-pane="plans">学习计划</button>
+        <button class="nav-item" data-pane="data">数据</button>
+        <button class="nav-item" data-pane="appearance">外观</button>
+        <button class="nav-item" data-pane="about">关于</button>
+      </nav>
 
-        <!-- 已绑定时的账号卡片，由 JS 填充 -->
-        <div id="bindAcct" class="acct-card" hidden></div>
+      <div class="settings-panes">
+        <!-- 账号：绑定力扣账号。只有一条路径 —— 弹浏览器登录，不碰 Cookie。 -->
+        <section class="settings-pane is-active" data-pane="account">
+          <div id="bindAcct" class="acct-card" hidden></div>
+          <p class="set-lead" id="bindLead"></p>
+          <div id="bindBrowserInfo" class="capability"></div>
+          <div class="set-actions">
+            <button id="bindLogin" class="primary">登录力扣并绑定</button>
+          </div>
 
-        <div id="bindBrowserInfo" class="capability"></div>
+          <div id="bindProgress" class="bind-progress" hidden>
+            <div class="spinner-line"><span class="dot"></span><span id="bindStatusText">准备中…</span></div>
+            <p class="muted small">请在弹出的窗口里扫码或输入账号密码。登录完成后这里会自动更新。</p>
+          </div>
 
-        <button id="bindLogin" class="primary big">登录力扣并绑定</button>
+          <div id="bindResult" class="bind-result" hidden></div>
 
-        <div id="bindProgress" class="bind-progress" hidden>
-          <div class="spinner-line"><span class="dot"></span><span id="bindStatusText">准备中…</span></div>
-          <p class="muted small">请在弹出的窗口里扫码或输入账号密码。登录完成后本页会自动更新。</p>
-        </div>
+          <p class="muted small">
+            登录态只保存在本机，不会上传到任何地方。登录成功后会自动导入你在力扣加入的学习计划。
+          </p>
+        </section>
 
-        <div id="bindResult" class="bind-result" hidden></div>
+        <!-- 学习计划：导入与同步 -->
+        <section class="settings-pane" data-pane="plans">
+          <div class="set-row">
+            <div class="set-label">我加入的计划</div>
+            <div class="set-value" id="setPlanSummary">—</div>
+          </div>
+
+          <label class="set-row switch-row" for="autoSyncToggle">
+            <span class="set-text">
+              <span class="set-label">打开时自动同步</span>
+              <span class="set-hint">启动后自动拉取我加入的计划和最新刷题进度</span>
+            </span>
+            <input type="checkbox" id="autoSyncToggle" class="switch">
+          </label>
+
+          <div class="set-actions">
+            <button id="syncMine" class="primary">导入我加入的计划</button>
+            <button id="syncFeatured" class="ghost">导入精选计划</button>
+            <button id="syncStatus" class="ghost">同步刷题状态</button>
+          </div>
+
+          <div class="set-row">
+            <div class="set-label">最后同步</div>
+            <div class="set-value" id="setSyncTime">—</div>
+          </div>
+
+          <div class="set-actions">
+            <button id="openPlansFromSettings" class="ghost">打开学习计划广场</button>
+          </div>
+
+          <p class="muted small">
+            「刷题状态」是力扣进度的本地快照：在力扣上新做过的题，要同步一次才会在这里变成「已通过」。
+          </p>
+        </section>
+
+        <!-- 数据：东西存在哪 -->
+        <section class="settings-pane" data-pane="data">
+          <div class="set-row">
+            <div class="set-label">工作区</div>
+            <div class="set-value path" id="setWorkspace" title="">—</div>
+            <button class="ghost small-btn" data-open="workspace">打开</button>
+          </div>
+
+          <div class="set-row">
+            <div class="set-label">数据目录</div>
+            <div class="set-value path" id="setDataDir" title="">—</div>
+            <button class="ghost small-btn" data-open="data">打开</button>
+          </div>
+
+          <p class="muted small">
+            抽题生成的代码和题面在工作区；账号凭据、配置和答题记录在数据目录。
+            桌面端的数据放在用户目录下，更新或重装应用都不会动它。
+          </p>
+        </section>
+
+        <!-- 外观 -->
+        <section class="settings-pane" data-pane="appearance">
+          <div class="set-row">
+            <div class="set-label">主题</div>
+            <div class="seg" id="themeSeg">
+              <button data-theme-mode="system">跟随系统</button>
+              <button data-theme-mode="dark">深色</button>
+              <button data-theme-mode="light">浅色</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 关于 -->
+        <section class="settings-pane" data-pane="about">
+          <div class="about-head">
+            <img src="/favicon.png" alt="" width="44" height="44">
+            <div>
+              <div class="about-name">lc-hunter</div>
+              <div class="muted small" id="aboutVersion">—</div>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">运行方式</div>
+            <div class="set-value" id="aboutMode">—</div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">运行环境</div>
+            <div class="set-value" id="aboutRuntime">—</div>
+          </div>
+        </section>
       </div>
-
-      <p class="muted small">
-        登录态只保存在本机 <code>.lc/credentials.json</code>，不会上传到任何地方。
-        随时可以在右上角账号菜单里解绑。
-      </p>
     </div>
   </div>
 </div>

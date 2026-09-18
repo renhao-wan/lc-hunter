@@ -13,6 +13,9 @@ const state = {
   scope: null,     // 当前抽题范围 { slug, name } | null（全库）
   counts: null,    // 当前范围下每种模式各有多少题
   group: '',       // 当前范围的名字，显示在左栏
+  env: null,       // /api/env：数据目录、是否桌面端、版本 —— 只有设置面板用得到
+  pane: 'account', // 设置面板当前分类
+  importing: false, // 自动导入中，防止登录后重复触发
 };
 
 // ---------------- 基础 ----------------
@@ -397,8 +400,8 @@ async function loadState() {
    * （真实踩例：hot100 界面显示已通过 2 题，力扣实际 91 题。）
    */
   const acTitle = s.statusSyncedAt
-    ? `你已通过的题目数（${fmtAgo(s.statusSyncedAt)}从力扣同步）。在力扣上新做的题要点「学习计划 → 同步刷题状态」才会更新`
-    : '你已通过的题目数。还没同步过力扣进度 —— 去「学习计划 → 同步刷题状态」，这里的数字才会和力扣一致';
+    ? `你已通过的题目数（${fmtAgo(s.statusSyncedAt)}从力扣同步）。在力扣上新做的题要在「设置 → 学习计划」里同步一次才会更新`
+    : '你已通过的题目数。还没同步过力扣进度 —— 去「设置 → 学习计划」同步一次，这里的数字才会和力扣一致';
   $('stats').innerHTML = [
     `<span class="stat" title="本地已收录的题目总数">题库 <b>${st.problems}</b></span>`,
     `<span class="stat" title="本地已同步的学习计划数量">计划 <b>${st.plans}</b></span>`,
@@ -411,29 +414,29 @@ async function loadState() {
     .join('');
 
   renderPlanSelect(s.plans);
-  renderBindButton(s);
+  renderAccount(s);
   renderWelcome();
   return s;
 }
 
-/** 顶栏的绑定按钮：按"没绑 / 绑了但失效 / 绑好了"三态显示 */
-function renderBindButton(s) {
-  const btn = $('bindBtn');
+/**
+ * 账号状态。
+ *
+ * 顶栏不放「绑定账号」按钮了 —— 绑定是配置一次就很少再动的动作，
+ * 混在工具栏上和「学习计划」并排，会让第一次打开的人以为必须先登录才能用。
+ * 现在只有两个出口：设置按钮的悬浮提示，和设置面板里的账号页。
+ */
+function renderAccount(s) {
+  const btn = $('settingsBtn');
   if (!s.bound) {
-    btn.textContent = '绑定账号';
-    btn.title = '绑定力扣账号后，可以同步你的学习计划进度和通过状态';
-    btn.classList.remove('ok');
+    btn.title = '设置 · 未绑定力扣账号';
   } else if (s.account?.signedIn) {
-    btn.textContent = s.account.name + (s.account.premium ? ' ★' : '');
-    btn.title = s.account.premium
-      ? `已登录 ${s.account.name}（Plus 会员）。点这里可以换账号`
-      : `已登录 ${s.account.name}。点这里可以换账号`;
-    btn.classList.add('ok');
+    btn.title = `设置 · 已登录 ${s.account.name}${s.account.premium ? '（Plus 会员）' : ''}`;
   } else {
-    btn.textContent = '登录已过期';
-    btn.title = '登录状态失效了，点这里重新绑定';
-    btn.classList.remove('ok');
+    btn.title = '设置 · 登录已过期，需要重新绑定';
   }
+  // 设置面板开着的时候，账号页要跟着刷新（绑完账号就停在这个页面上）
+  if (!$('settingsModal').hidden) renderSettingsAccount();
 }
 
 /**
@@ -1225,49 +1228,70 @@ async function syncOnePlan(slug) {
     $('plansStatus').textContent = '';
   }
 }
+/**
+ * 把「我加入的计划」拉进本地。
+ *
+ * 抽成独立函数是因为它有三个调用方：设置里的按钮、登录后的自动导入、
+ * 启动时的兜底导入 —— 三处逻辑必须完全一致，不然又会走回
+ * 「按钮点完是好的，自动跑的少同步了一步」这种老路。
+ *
+ * @returns {Promise<{ok:boolean, plans:number, problems:number, hint:string}>}
+ */
+async function importMine({ quiet = false } = {}) {
+  const r = await api('/api/plans/sync', { method: 'POST', body: { mine: true } });
+  const good = (r.plans || []).filter((p) => p.count > 0);
+  const problems = good.reduce((s, p) => s + p.count, 0);
+
+  await loadState();
+  await loadProblems();
+  if (!$('plansModal').hidden) await openPlans();
+  renderSettingsPlans();
+
+  const hint = good.length ? '' : '没有拿到题目。先绑定账号，或去「学习计划」里挑一个手动同步。';
+  if (!quiet) {
+    if (hint) toast(hint, 'err');
+    else toast(`已导入 ${good.length} 个计划，共 ${problems} 题`, 'ok');
+  }
+  return { ok: good.length > 0, plans: good.length, problems, hint };
+}
+
+/** 设置里「导入我加入的计划」按钮 */
 async function syncMine() {
   const btn = $('syncMine');
+  const summary = $('setPlanSummary');
   btn.disabled = true;
-  btn.textContent = '同步中…';
-  $('plansStatus').textContent = '正在同步你加入的全部计划，可能要一会儿…';
+  btn.textContent = '导入中…';
+  summary.textContent = '正在读取你加入的计划…';
   try {
-    const r = await api('/api/plans/sync', { method: 'POST', body: { mine: true } });
-    const good = (r.plans || []).filter((p) => p.count > 0);
-    if (!good.length) {
-      toast('没有同步到题目。先绑定账号，或去「全部计划」里手动同步。', 'err');
-    } else {
-      toast(`已同步 ${good.length} 个计划，共 ${good.reduce((s, p) => s + p.count, 0)} 题`, 'ok');
-    }
-    await loadState();
-    await openPlans();
-    await loadProblems();
+    await importMine();
   } catch (e) {
     toast(e.message, 'err');
   } finally {
     btn.disabled = false;
-    btn.textContent = '同步我加入的全部计划';
-    $('plansStatus').textContent = '';
+    btn.textContent = '导入我加入的计划';
+    renderSettingsPlans();
   }
 }
 
+/** 设置里「导入精选计划」按钮：不登录也能把内置的十几个精选计划拉下来 */
 async function syncFeatured() {
   const btn = $('syncFeatured');
   btn.disabled = true;
-  btn.textContent = '同步中…';
-  $('plansStatus').textContent = '正在同步内置精选计划（约 11 个，需要一点时间）…';
+  btn.textContent = '导入中…';
+  $('setPlanSummary').textContent = '正在导入精选计划（约 11 个）…';
   try {
     const r = await api('/api/plans/sync', { method: 'POST', body: {} });
     const good = (r.plans || []).filter((p) => p.count > 0);
-    toast(`已同步 ${good.length} 个精选计划，共 ${good.reduce((s, p) => s + p.count, 0)} 题`, 'ok');
+    toast(`已导入 ${good.length} 个精选计划，共 ${good.reduce((s, p) => s + p.count, 0)} 题`, 'ok');
     await loadState();
-    await openPlans();
     await loadProblems();
+    if (!$('plansModal').hidden) await openPlans();
   } catch (e) {
-    toast('同步失败：' + e.message, 'err');
+    toast('导入失败：' + e.message, 'err');
   } finally {
     btn.disabled = false;
-    btn.textContent = '同步精选计划';
-    $('plansStatus').textContent = '';
+    btn.textContent = '导入精选计划';
+    renderSettingsPlans();
   }
 }
 
@@ -1279,45 +1303,73 @@ async function syncFeatured() {
  *
  * 全站 4400+ 题要跑 50 秒左右，所以走「起后台任务 + 轮询进度」，
  * 不能让 HTTP 请求干等（会被浏览器/代理掐断）。
+ *
+ * @param {object} [o]
+ * @param {boolean} [o.quiet] 静默跑：不占按钮、进度写在设置的「最后同步」那行。
+ *   登录后自动导入走这条路 —— 用户没点任何按钮，却在 50 秒里看着一个
+ *   转圈的光标会莫名其妙，写进设置里他随时能去看进度。
  */
-async function syncStatus() {
+async function runStatusSync({ quiet = false } = {}) {
   const btn = $('syncStatus');
-  const status = $('plansStatus');
-  btn.disabled = true;
-  btn.textContent = '同步中…';
+  const setBusy = (text) => {
+    if (quiet) {
+      const el = $('setSyncTime');
+      if (el) el.textContent = text || '—';
+    } else {
+      $('plansStatus').textContent = text;
+    }
+  };
+
+  if (!quiet) {
+    btn.disabled = true;
+    btn.textContent = '同步中…';
+  }
 
   try {
     const start = await api('/api/sync/status', { method: 'POST' });
     if (!start.started) {
-      toast(start.hint || '已在同步中', 'err');
-      return;
+      if (!quiet) toast(start.hint || '已在同步中', 'err');
+      return { ok: false, busy: true };
     }
 
     // 轮询到 done。CDP/代理都不该挂 50 秒，所以这里用短轮询。
     let job = null;
     for (let i = 0; i < 600; i++) {
       job = await api('/api/sync/status');
-      status.textContent = job.message || '正在同步刷题状态…';
+      setBusy(job.message || '正在同步刷题状态…');
       if (!job.running) break;
       await new Promise((r) => setTimeout(r, 1000));
     }
 
     if (job?.error) {
-      toast('同步失败：' + job.error, 'err');
-    } else if (job?.done) {
+      if (!quiet) toast('同步失败：' + job.error, 'err');
+      return { ok: false, error: job.error };
+    }
+    if (job?.done) {
       toast(job.message || '刷题状态已同步', 'ok');
       // 状态变了 → 列表、顶栏统计、下拉里的计数全要重算
       await loadState();
       await loadProblems();
-      await openPlans();
+      if (!$('plansModal').hidden) await openPlans();
+      return { ok: true };
     }
+    return { ok: false };
   } catch (e) {
-    toast(e.message, 'err');
+    if (!quiet) toast(e.message, 'err');
+    return { ok: false, error: e.message };
   } finally {
-    btn.disabled = false;
-    btn.textContent = '同步刷题状态';
-    status.textContent = '';
+    if (!quiet) {
+      btn.disabled = false;
+      btn.textContent = '同步刷题状态';
+    }
+    setBusy('');
+    renderSettingsPlans();
   }
+}
+
+/** 设置里「同步刷题状态」按钮 */
+function syncStatus() {
+  return runStatusSync();
 }
 
 /** 把抽题范围设成某个计划，并关掉弹窗 */
@@ -1334,8 +1386,8 @@ async function usePlanAsScope(slug, name) {
 let bindCap = null;
 let bindTimer = null;
 
-async function openBind() {
-  $('bindModal').hidden = false;
+/** 探测「有没有可用的浏览器 + 现在登录的是谁」，然后渲染设置里的账号页 */
+async function refreshBindCapability() {
   $('bindProgress').hidden = true;
   $('bindResult').hidden = true;
   $('bindResult').textContent = '';
@@ -1348,7 +1400,7 @@ async function openBind() {
 }
 
 /**
- * 渲染绑定弹窗。
+ * 渲染设置里的账号页。
  *
  * 只有两种状态：
  *   - 已登录   → 显示账号卡片 + 「重新登录（换个账号）」
@@ -1406,12 +1458,13 @@ function renderBindModal(cap) {
 }
 
 async function doUnbind() {
-  if (!confirm('确定解绑当前力扣账号？本地题目与计划数据会保留。')) return;
+  if (!confirm('确定解绑当前力扣账号？\n\n本地题目、计划和工作区都会保留，只是不再同步你的力扣进度。')) return;
   try {
     await api('/api/unbind', { method: 'POST' });
     toast('已解绑', 'ok');
-    $('bindModal').hidden = true;
     await loadState();
+    await refreshBindCapability();
+    renderSettings();
     if (!$('plansModal').hidden) await openPlans();
   } catch (e) {
     toast(e.message, 'err');
@@ -1441,10 +1494,8 @@ async function doBrowserLogin() {
       $('bindResult').textContent = `已绑定：${r.account?.name || '力扣账号'}`;
       await loadState();
       if (!$('plansModal').hidden) await openPlans();
-      setTimeout(() => {
-        $('bindModal').hidden = true;
-        toast('绑定成功，可以开始抽题了', 'ok');
-      }, 900);
+      // 绑上了就直接把计划导进来 —— 账号都登了，没道理再让用户点一次「导入」
+      await autoImportPlans();
     } else {
       $('bindProgress').hidden = true;
       $('bindResult').hidden = false;
@@ -1494,25 +1545,236 @@ function stopBindPoll() {
   bindTimer = null;
 }
 
+// ---------------- 自动导入学习计划 ----------------
+
+const AUTO_SYNC_KEY = 'lc-auto-sync';
+
+/** 打开时自动同步。默认开 —— 关掉它的人通常是嫌每次开机都要等一会儿 */
+function autoSyncEnabled() {
+  return localStorage.getItem(AUTO_SYNC_KEY) !== '0';
+}
+
+/**
+ * 登录后 / 启动时把计划导进来。
+ *
+ * 以前这两步都要用户自己点：先「同步我加入的全部计划」，再「同步刷题状态」。
+ * 可是账号都登进来了，力扣那边的计划清单就是能直接读的东西 ——
+ * 让用户手动"导入"等于把实现的内部步骤摊到他面前。
+ */
+async function autoImportPlans() {
+  if (state.importing) return;
+  state.importing = true;
+  try {
+    const r = await importMine({ quiet: true });
+    if (r.ok) toast(`已自动导入 ${r.plans} 个学习计划`, 'ok');
+    // 再补一次刷题状态：没有它，「已通过」看到的还是本地跑通过的那几道
+    await runStatusSync({ quiet: true });
+  } catch (e) {
+    // 自动流程不该打断用户 —— 失败信息留在「设置 → 学习计划」里给他看
+    console.warn('自动导入失败：', e.message);
+  } finally {
+    state.importing = false;
+  }
+}
+
+/**
+ * 启动时的自动同步。
+ *
+ * 只在「确实缺东西」时才跑，不做成每次启动都全量刷一遍：
+ * 刷题状态一次要跑 50 秒，开机必跑会让机器和力扣接口都白忙。
+ * 判定：没登录不跑；本地一个「我加入的计划」都没有，跑；状态快照超过 6 小时，也跑。
+ */
+async function maybeAutoSync() {
+  if (!autoSyncEnabled()) return;
+  const s = lastState;
+  if (!s?.bound || !s.account?.signedIn) return;
+  const mine = (s.plans || []).filter((p) => p.source === 'mine');
+  const stale = !s.statusSyncedAt || Date.now() - Number(s.statusSyncedAt) > 6 * 3600 * 1000;
+  if (!mine.length || stale) await autoImportPlans();
+}
+
+// ---------------- 设置 ----------------
+
+const PLATFORM_CN = { win32: 'Windows', darwin: 'macOS', linux: 'Linux' };
+
+/** 目录位置、桌面端与否、版本 —— 只有后端知道，问一次缓存住 */
+async function loadEnv() {
+  try {
+    state.env = await api('/api/env');
+  } catch {
+    state.env = null;
+  }
+  return state.env;
+}
+
+/**
+ * 打开设置。
+ *
+ * 账号页要现探测浏览器能力（找 Chrome/Edge 要扫一遍磁盘），
+ * 所以只在真的切到账号页时才做，别的分类点开是瞬时的。
+ */
+async function openSettings(pane = state.pane || 'account') {
+  $('settingsModal').hidden = false;
+  switchPane(pane);
+  if (!state.env) await loadEnv();
+  renderSettings();
+  if (pane === 'account') await refreshBindCapability();
+}
+
+function closeSettings() {
+  stopBindPoll();
+  $('settingsModal').hidden = true;
+}
+
+function switchPane(pane) {
+  state.pane = pane;
+  for (const el of $('settingsNav').querySelectorAll('.nav-item')) {
+    el.classList.toggle('is-active', el.dataset.pane === pane);
+  }
+  for (const el of document.querySelectorAll('.settings-pane')) {
+    el.classList.toggle('is-active', el.dataset.pane === pane);
+  }
+  if (pane === 'account' && !bindCap) refreshBindCapability();
+}
+
+function renderSettings() {
+  renderSettingsPlans();
+  renderSettingsData();
+  renderSettingsAbout();
+  applyTheme(); // 顺便把「外观」里的选中态刷对
+}
+
+/** 账号页的渲染在 renderBindModal 里（它要处理三种登录态），这里只是个转发 */
+function renderSettingsAccount() {
+  if (bindCap) renderBindModal(bindCap);
+}
+
+function renderSettingsPlans() {
+  const s = lastState;
+  const mine = (s?.plans || []).filter((p) => p.source === 'mine');
+  const summary = $('setPlanSummary');
+  if (!summary) return;
+
+  if (!s?.bound) summary.textContent = '未绑定账号';
+  else if (!mine.length) summary.textContent = '还没有导入';
+  else summary.textContent = `${mine.length} 个 · 共 ${mine.reduce((a, p) => a + p.count, 0)} 题`;
+
+  $('setSyncTime').textContent = s?.statusSyncedAt ? fmtAgo(s.statusSyncedAt) : '还没同步过';
+  $('autoSyncToggle').checked = autoSyncEnabled();
+}
+
+function renderSettingsData() {
+  const p = state.env?.paths;
+  const put = (id, v) => {
+    const el = $(id);
+    el.textContent = v || '—';
+    el.title = v || '';
+  };
+  put('setWorkspace', p?.workspace);
+  put('setDataDir', p?.data);
+}
+
+function renderSettingsAbout() {
+  const env = state.env;
+  $('aboutVersion').textContent = env ? `版本 ${env.version}` : '—';
+  $('aboutMode').textContent = env ? (env.desktop ? '桌面应用' : '浏览器（lc ui）') : '—';
+  $('aboutRuntime').textContent = env
+    ? [
+        env.electron ? `Electron ${env.electron}` : null,
+        `Node ${env.node}`,
+        PLATFORM_CN[env.platform] || env.platform,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '—';
+}
+
+/** 在系统文件管理器里打开工作区 / 数据目录 */
+async function openFolder(which) {
+  try {
+    const r = await api('/api/open-folder', { method: 'POST', body: { which } });
+    if (r.skipped) toast(r.hint || '这个环境打不开文件夹', 'err');
+  } catch (e) {
+    toast('打不开文件夹：' + e.message, 'err');
+  }
+}
+
+// ---------------- 主题 ----------------
+
+const THEME_KEY = 'lc-theme-mode'; // system | dark | light
+const THEME_KEY_OLD = 'lc-theme'; // 旧版只存 dark/light，读一次做迁移
+
+function themeMode() {
+  const m = localStorage.getItem(THEME_KEY);
+  if (m === 'system' || m === 'dark' || m === 'light') return m;
+  const old = localStorage.getItem(THEME_KEY_OLD);
+  return old === 'dark' || old === 'light' ? old : 'system';
+}
+
+/**
+ * 套用主题。
+ *
+ * 默认值给「跟随系统」而不是写死深色 —— 桌面应用里，系统是浅色而窗口是黑的
+ * 会显得很突兀。用户手动选过才覆盖。
+ */
+function applyTheme() {
+  const mode = themeMode();
+  const dark =
+    mode === 'system' ? !matchMedia('(prefers-color-scheme: light)').matches : mode === 'dark';
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  for (const b of document.querySelectorAll('#themeSeg button')) {
+    b.classList.toggle('is-active', b.dataset.themeMode === mode);
+  }
+}
+
+function setThemeMode(mode) {
+  localStorage.setItem(THEME_KEY, mode);
+  applyTheme();
+}
+
 // ---------------- 事件绑定 ----------------
 
 $('drawBtn').onclick = doDraw;
 $('genBtn').onclick = doGen;
 $('runBtn').onclick = doRun;
 $('saveBtn').onclick = saveFile;
-$('bindBtn').onclick = openBind;
+
+// 设置
+$('settingsBtn').onclick = () => openSettings();
+$('settingsClose').onclick = closeSettings;
+$('settingsNav').onclick = (e) => {
+  const item = e.target.closest('.nav-item');
+  if (item) switchPane(item.dataset.pane);
+};
 $('bindLogin').onclick = doBrowserLogin;
-$('bindCancel').onclick = () => {
-  stopBindPoll();
-  $('bindModal').hidden = true;
+$('autoSyncToggle').onchange = (e) => {
+  localStorage.setItem(AUTO_SYNC_KEY, e.target.checked ? '1' : '0');
+  toast(e.target.checked ? '下次打开会自动同步' : '已关闭自动同步');
+};
+$('syncMine').onclick = syncMine;
+$('syncFeatured').onclick = syncFeatured;
+$('syncStatus').onclick = syncStatus;
+$('openPlansFromSettings').onclick = () => {
+  closeSettings();
+  openPlans();
+};
+// 「打开」目录按钮用事件委托 —— 两个按钮一个 handler，靠 data-open 区分
+$('settingsModal').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-open]');
+  if (b) openFolder(b.dataset.open);
+});
+$('themeSeg').onclick = (e) => {
+  const b = e.target.closest('button[data-theme-mode]');
+  if (b) setThemeMode(b.dataset.themeMode);
 };
 
 // 学习计划
 $('plansBtn').onclick = openPlans;
 $('plansClose').onclick = () => ($('plansModal').hidden = true);
-$('syncMine').onclick = syncMine;
-$('syncFeatured').onclick = syncFeatured;
-$('syncStatus').onclick = syncStatus;
+$('plansImport').onclick = () => {
+  $('plansModal').hidden = true;
+  openSettings('plans');
+};
 $('planSearch').oninput = () => {
   if (state.plans) renderAllPlans(state.plans.plans, $('planSearch').value);
 };
@@ -1676,12 +1938,10 @@ $('searchInput').oninput = () => {
   searchTimer = setTimeout(loadProblems, 260);
 };
 
-$('themeBtn').onclick = () => {
-  const cur = document.documentElement.dataset.theme;
-  const next = cur === 'dark' ? 'light' : 'dark';
-  document.documentElement.dataset.theme = next;
-  localStorage.setItem('lc-theme', next);
-};
+// 选了「跟随系统」时，系统换主题要立刻跟上（桌面端切系统主题很常见）
+matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+  if (themeMode() === 'system') applyTheme();
+});
 
 $('editor').addEventListener('input', () => (state.dirty = true));
 $('editor').addEventListener('keydown', (e) => {
@@ -1706,10 +1966,7 @@ $('editor').addEventListener('keydown', (e) => {
 // ---------------- 启动 ----------------
 
 async function boot() {
-  const saved = localStorage.getItem('lc-theme');
-  if (saved) document.documentElement.dataset.theme = saved;
-  else document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-
+  applyTheme();
   showDesc();
   applyCollapse();
   try {
@@ -1718,6 +1975,9 @@ async function boot() {
   } catch (e) {
     toast('初始化失败：' + e.message, 'err');
   }
+  // 登录了就不该再让用户自己导入计划：缺什么补什么。
+  // 故意不 await —— 拉计划要好几秒，界面不该被它挡住
+  maybeAutoSync();
 }
 
 (async function () {
