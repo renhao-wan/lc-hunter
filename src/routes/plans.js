@@ -65,6 +65,9 @@ export default {
         db.planModeCounts().map((x) => [x.slug, x.counts]),
       ),
       kamaIndexed: db.countKamaProblems(),
+      // 刷题状态最后一次从力扣同步的时间；null = 从没同步过，
+      // 界面据此提示「通过状态可能不是最新的」。
+      statusSyncedAt: db.lastStatusSyncAt(),
     };
   },
 

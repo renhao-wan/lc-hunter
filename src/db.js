@@ -548,6 +548,17 @@ export function upsertProgress(slug, { lcStatus }) {
   ).run(slug, lcStatus ?? null, Date.now());
 }
 
+/**
+ * 刷题状态最后一次从力扣同步的时间（毫秒时间戳），从没同步过返回 null。
+ *
+ * 界面靠它显示「通过状态最后同步于 X」——不显示的话，用户看到一份几个月前的
+ * 陈旧数据时无从判断，会以为是工具算错了（实际只是没同步）。
+ */
+export function lastStatusSyncAt() {
+  const r = getDb().prepare('SELECT MAX(last_synced) AS t FROM progress').get();
+  return r?.t ?? null;
+}
+
 export function markDrawn(slug) {
   getDb()
     .prepare(

@@ -168,7 +168,13 @@ const checks = [
   ['左栏有「做过的」选项', filterOpts.some((o) => o.startsWith('done='))],
   ['「抽什么样的」也有「做过的」', modeOpts.some((o) => o.startsWith('done='))],
   ['「已通过」能筛出题（修复前是 0）', results.ac.count > 0],
-  ['「已通过」含 two-sum（本地 AC 14 次那道）', JSON.stringify(results.ac.titles).includes('两数之和') || results.ac.count === 2],
+  /*
+   * 用 slug 判，不要用 titles —— DOM 提取的标题会带换行和缩进噪声
+   * （实测形如 "LCR 140\n    训练计划 II\n    "），`includes('两数之和')` 会误判。
+   * 更不能写 `count === 2`：那是"（本地跑过的）只有 2 题"那个时期的硬编码，
+   * 一旦同步了力扣状态（全站 191 题）就永远不成立。
+   */
+  ['「已通过」含 two-sum（本地也 AC 过，力扣侧也是 ac）', acSlugs.has('two-sum')],
   ['「做过的」数量 ≥ 「已通过」', results.done.count >= results.ac.count],
   ['「做过的」= 已通过 + 做过没过', results.done.count === results.ac.count + results.notac.count],
   ['「没做过」里不含任何「已通过」的题', overlap.length === 0 && acNotInNew],

@@ -288,6 +288,24 @@ const DIFF_CN = { Easy: '简单', Medium: '中等', Hard: '困难' };
 const STATUS_CN = { ac: '已通过', notac: '做过没过', new: '没做过' };
 
 /**
+ * 时间戳 → 「刚刚 / N 分钟前 / N 小时前 / N 天前 / N 个月前」。
+ *
+ * 用来告诉用户"这份数据是多久之前拉的"。本地刷题状态是力扣的快照，
+ * 不写清楚时间，用户对着几周前的旧数字会以为工具算错了。
+ */
+function fmtAgo(ts) {
+  const diff = Date.now() - Number(ts);
+  if (!Number.isFinite(diff) || diff < 0) return '';
+  const min = 60_000;
+  if (diff < min) return '刚刚';
+  if (diff < 60 * min) return `${Math.floor(diff / min)} 分钟前`;
+  if (diff < 24 * 60 * min) return `${Math.floor(diff / (60 * min))} 小时前`;
+  const days = Math.floor(diff / (24 * 60 * min));
+  if (days < 30) return `${days} 天前`;
+  return `${Math.floor(days / 30)} 个月前`;
+}
+
+/**
  * 题面渲染。
  *
  * 力扣的 content 字段本身就是 HTML（<p>/<ul>/<pre>/<strong>…），
@@ -371,10 +389,20 @@ async function loadState() {
   // 统计数字用大白话，鼠标悬停给出完整解释。
   // 「AC」「题单」这类词只有刷题老手看得懂，第一次用的人会一脸问号。
   const st = s.stats;
+  /*
+   * 「已通过」这个数字的悬浮说明里带上最后同步时间。
+   *
+   * 为什么必须显示：这份数据是**快照**，用户在力扣上新过的题不会自动出现。
+   * 不写清楚，用户看到一份几周前的旧数据会以为工具算错了 —— 实际是没同步。
+   * （真实踩例：hot100 界面显示已通过 2 题，力扣实际 91 题。）
+   */
+  const acTitle = s.statusSyncedAt
+    ? `你已通过的题目数（${fmtAgo(s.statusSyncedAt)}从力扣同步）。在力扣上新做的题要点「学习计划 → 同步刷题状态」才会更新`
+    : '你已通过的题目数。还没同步过力扣进度 —— 去「学习计划 → 同步刷题状态」，这里的数字才会和力扣一致';
   $('stats').innerHTML = [
     `<span class="stat" title="本地已收录的题目总数">题库 <b>${st.problems}</b></span>`,
     `<span class="stat" title="本地已同步的学习计划数量">计划 <b>${st.plans}</b></span>`,
-    `<span class="stat" title="你已通过的题目数（需要绑定账号）">已通过 <b>${st.ac}</b></span>`,
+    `<span class="stat" title="${acTitle}">已通过 <b>${st.ac}</b></span>`,
     st.due > 0
       ? `<span class="stat" title="按复习计划，今天该重做的题">待复习 <b>${st.due}</b></span>`
       : '',
@@ -1243,6 +1271,55 @@ async function syncFeatured() {
   }
 }
 
+/**
+ * 把力扣上的通过状态（lc_status）拉到本地。
+ *
+ * 这条以前只有命令行的 `lc sync` 能走，界面没入口 —— 于是界面上的「已通过」
+ * 只认本地跑通过的题，跟力扣真实进度差很远（实测 hot100：本地记 2 题，实际 91 题）。
+ *
+ * 全站 4400+ 题要跑 50 秒左右，所以走「起后台任务 + 轮询进度」，
+ * 不能让 HTTP 请求干等（会被浏览器/代理掐断）。
+ */
+async function syncStatus() {
+  const btn = $('syncStatus');
+  const status = $('plansStatus');
+  btn.disabled = true;
+  btn.textContent = '同步中…';
+
+  try {
+    const start = await api('/api/sync/status', { method: 'POST' });
+    if (!start.started) {
+      toast(start.hint || '已在同步中', 'err');
+      return;
+    }
+
+    // 轮询到 done。CDP/代理都不该挂 50 秒，所以这里用短轮询。
+    let job = null;
+    for (let i = 0; i < 600; i++) {
+      job = await api('/api/sync/status');
+      status.textContent = job.message || '正在同步刷题状态…';
+      if (!job.running) break;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+
+    if (job?.error) {
+      toast('同步失败：' + job.error, 'err');
+    } else if (job?.done) {
+      toast(job.message || '刷题状态已同步', 'ok');
+      // 状态变了 → 列表、顶栏统计、下拉里的计数全要重算
+      await loadState();
+      await loadProblems();
+      await openPlans();
+    }
+  } catch (e) {
+    toast(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '同步刷题状态';
+    status.textContent = '';
+  }
+}
+
 /** 把抽题范围设成某个计划，并关掉弹窗 */
 async function usePlanAsScope(slug, name) {
   $('plansModal').hidden = true;
@@ -1435,6 +1512,7 @@ $('plansBtn').onclick = openPlans;
 $('plansClose').onclick = () => ($('plansModal').hidden = true);
 $('syncMine').onclick = syncMine;
 $('syncFeatured').onclick = syncFeatured;
+$('syncStatus').onclick = syncStatus;
 $('planSearch').oninput = () => {
   if (state.plans) renderAllPlans(state.plans.plans, $('planSearch').value);
 };
