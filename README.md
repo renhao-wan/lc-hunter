@@ -103,7 +103,7 @@ lc ui --no-open        # 不自动开浏览器
 和这个原则冲突。现在的做法是纯 Node 本地服务 + 浏览器 UI，**内核一行没动**；
 真要做成 `.exe` 桌面端，后面套一层 Electron/Tauri 壳即可。
 
-服务只监听 `127.0.0.1` —— 本地工具不该在局域网里裸奔。API 全部在 `src/server.js`：
+服务只监听 `127.0.0.1` —— 本地工具不该在局域网里裸奔。API 按域拆在 `src/routes/*.js`（骨架在 `src/http.js`）：
 
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
@@ -205,10 +205,14 @@ quality < 3 就重置计数，否则间隔 = 上次间隔 × 难度系数。
 src/
   config.js           配置与凭据（.lc/config.json、.lc/credentials.json）
   db.js               SQLite（node:sqlite，零 npm 依赖）
+  labels.js           中文标签唯一来源（难度/状态 → 中文，见下方「中文标签」）
   cli.js              命令入口
+  http.js             HTTP 骨架（读请求体 / 写 JSON / 防目录穿越 / 静态文件 / 启动）
   leetcode/
     queries.js        GraphQL 查询集（站点自用接口，非官方 API）
     client.js         客户端 + 节流 + 状态归一化
+    plans.js          内置计划清单 + 可抽题判断
+    browser.js        弹浏览器登录抓 Cookie（CDP）
   lang/
     index.js          LanguageProfile 抽象 + 注册表  ← 多语言扩展点
     java/profile.js   Java 实现（核心/ACM 渲染、javac、java）
@@ -223,13 +227,29 @@ src/
     index.js          卡码网抓取（ACM 权威 IO 数据源）
     match.js          标题归一化 + bigram 打分匹配
     verify.js         绑定前的 IO 结构校验（拦同名改造题）
-  server.js           本地 Web 后端（JSON API，纯 node:http）
+  server.js           薄壳：把各域路由 register 成一张表交给 http.js
+  routes/             按域拆的 JSON API（每个导出 { 'METHOD /path': handler }）
+    helpers.js        路由共享的题目 helper（rowToProblem / hydrateDetail …）
+    plans.js          状态 / 计划广场 / 同步计划 / 计划详情
+    problems.js       浏览 / 抽题 / 详情 / 生成 / 文件读写 / 运行
+    review.js         复习（手动 + 从运行结果自动排）
+    kama.js           卡码网绑定（搜索 / 绑定 / 解绑）
+    account.js        账号（一键登录 / 进度 / 能力自检 / 解绑）
+    sync.js           数据同步
 web/
   index.html          界面骨架
   style.css           主题变量（深浅色）
   app.js              原生 JS，无框架无构建
 bin/lc.js             启动器（屏蔽 SQLite 实验警告）
 ```
+
+### 中文标签只有一个来源
+
+难度→中文（简单/中等/困难）和状态→中文（已通过/做过没过/没做过）原来散在
+cli.js / generate.js / app.js 三个文件、两套键名、两套说法。现在统一收进
+`src/labels.js`（唯一来源），`web/app.js` 因为是静态目录 import 不到 src/，
+留一份副本。`test/_verify-labels.js` 会读两份做深比较 + 全仓扫就地写死的映射，
+改了一边没改另一边就报红。要加新状态/难度时只改 `labels.js` 一处。
 
 ### 加一门新语言
 

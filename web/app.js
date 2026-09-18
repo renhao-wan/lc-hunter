@@ -275,6 +275,13 @@ function enhanceSelect(sel) {
   refresh();
 }
 
+/*
+ * 中文标签。**唯一来源是 src/labels.js**，这里是它的副本 ——
+ * web/ 是静态目录没有打包器，import 不到 src/，只能抄一份。
+ * 键名必须是规范的那套：难度 Easy/Medium/Hard（后端已经在 server.js 里
+ * 归一化过），状态 ac/notac/new。
+ * test/_verify-labels.js 会读这两个文件做深比较，改了一边没改另一边就报红。
+ */
 const DIFF_CN = { Easy: '简单', Medium: '中等', Hard: '困难' };
 // 状态词都用大白话。「AC」「未AC」是刷题圈的黑话，第一次用的人看不懂。
 // 后端算好的是 ac / notac / new 三种（见 src/db.js 的 effectiveStatus）。

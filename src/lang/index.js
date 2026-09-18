@@ -55,7 +55,7 @@ export class LanguageProfile {
 
 const registry = new Map();
 
-export function registerProfile(profile) {
+function registerProfile(profile) {
   registry.set(profile.id, profile);
   return profile;
 }
@@ -92,7 +92,3 @@ export function copyRuntime(srcRelPath, destDir) {
   return dest;
 }
 
-export function readRuntime(srcRelPath) {
-  const src = path.join(__dirname, srcRelPath);
-  return fs.readFileSync(src, 'utf8');
-}

@@ -21,7 +21,7 @@ export function todayStr(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
-export function addDays(dateStr, n) {
+function addDays(dateStr, n) {
   const [y, m, d] = String(dateStr || todayStr())
     .split('-')
     .map(Number);

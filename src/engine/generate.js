@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveWorkspace } from '../config.js';
 import { copyRuntime } from '../lang/index.js';
+import { difficultyCn } from '../labels.js';
 import { extractExamplesFromContent, casesFromSample, formatTestcases, stripHtml } from './testcases.js';
 
 export function hydrateProblem(row) {
@@ -13,7 +14,7 @@ export function hydrateProblem(row) {
   };
 }
 
-export function problemDirName(q) {
+function problemDirName(q) {
   const id = String(q.frontend_id || q.frontendId || '0000').padStart(4, '0');
   return `${id}-${q.slug}`;
 }
@@ -24,8 +25,7 @@ export function problemDir(q, cfg) {
 
 function buildReadme(q, { level, notes, kama }) {
   const title = q.title_cn || q.title_en || q.slug;
-  const diffMap = { EASY: '简单', MEDIUM: '中等', HARD: '困难' };
-  const diff = diffMap[String(q.difficulty).toUpperCase()] || q.difficulty || '-';
+  const diff = difficultyCn(q.difficulty);
   const tags = (q.tags || []).join('、');
   const body = stripHtml(q.content_md || '(题面未拉取，执行 lc fetch 获取)').trim();
 

@@ -25,7 +25,7 @@ function escapeRe(s) {
 /**
  * 把 "nums = [2,7,11,15], target = 9" 按参数名拆成 ["[2,7,11,15]", "9"]
  */
-export function splitParamValues(inputStr, names) {
+function splitParamValues(inputStr, names) {
   const hits = [];
   for (const n of names) {
     const re = new RegExp('(?:^|[,\\s\\uFF0C])' + escapeRe(n) + '\\s*=\\s*');
@@ -122,7 +122,7 @@ export function parseTestcases(txt) {
 }
 
 /** 数值容错比对（力扣对 double 有精度容忍） */
-export function normalizeToken(t) {
+function normalizeToken(t) {
   return String(t).trim().replace(/^"(.*)"$/, '$1');
 }
 

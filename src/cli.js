@@ -27,6 +27,7 @@ import { runWorkspace } from './engine/runner.js';
 import { fetchKamaProblem, fetchAllProblems } from './kama/index.js';
 import { findCandidates, pickAuto } from './kama/match.js';
 import { checkIoCompat, formatIoCheck } from './kama/verify.js';
+import { difficultyCn, statusCn } from './labels.js';
 
 // ---------------- 基础工具 ----------------
 // 颜色一律用 \u001b 转义，不要写裸 ESC 控制字符：
@@ -128,15 +129,25 @@ function loadHydrated(slug) {
   return hydrateProblem(row);
 }
 
-const DIFF_CN = { EASY: '简单', MEDIUM: '中等', HARD: '困难' };
-function diffCn(d) {
-  return DIFF_CN[String(d || '').toUpperCase()] || d || '-';
+// 状态词（已通过 / 做过没过 / 没做过）直接从 labels 取，这里只负责上色。
+// 以前这里写的是「AC / 未AC / 未做」，同一份数据在命令行和页面上两个说法。
+const STATUS_COLOR = { ac: C.green, notac: C.yellow, new: C.dim };
+
+function coloredStatus(s) {
+  return (STATUS_COLOR[s] || C.dim) + statusCn(s) + C.reset;
 }
 
-function statusCn(s) {
-  if (s === 'ac') return C.green + 'AC' + C.reset;
-  if (s === 'notac') return C.yellow + '未AC' + C.reset;
-  return C.dim + '未做' + C.reset;
+/**
+ * 「已通过 8　做过没过 3　没做过 109」这一段的统一写法。
+ * doctor / sync / plans / draw 四处统计行以前各写一遍，还都是 AC/未AC 黑话。
+ * 对象里没给的项就不显示（比如 doctor 只看得到 ac/notac）。
+ * fresh 是历史上另一种叫法，一并兼容。
+ */
+function statusCounts(o) {
+  const fresh = o.new ?? o.fresh;
+  const parts = [`${statusCn('ac')} ${o.ac}`, `${statusCn('notac')} ${o.notac}`];
+  if (fresh != null) parts.push(`${statusCn('new')} ${fresh}`);
+  return parts.join('　');
 }
 
 // ---------------- 命令 ----------------
@@ -174,7 +185,7 @@ async function cmdDoctor() {
   log('');
   head('本地数据');
   log(
-    `  题目 ${s.problems}（已拉详情 ${s.detailed}）　题单 ${s.plans}　AC ${s.ac}　未AC ${s.notac}　待复习 ${s.due}　运行记录 ${s.attempts}`,
+    `  题目 ${s.problems}（已拉详情 ${s.detailed}）　题单 ${s.plans}　${statusCounts(s)}　待复习 ${s.due}　运行记录 ${s.attempts}`,
   );
 }
 
@@ -317,7 +328,7 @@ async function cmdSync({ flags }) {
 
   const s = db.stats();
   log('');
-  ok(`当前库内：题目 ${s.problems}（详情 ${s.detailed}）　题单 ${s.plans}　AC ${s.ac}　未AC ${s.notac}`);
+  ok(`当前库内：题目 ${s.problems}（详情 ${s.detailed}）　题单 ${s.plans}　${statusCounts(s)}`);
 }
 
 /**
@@ -426,7 +437,7 @@ async function cmdPlans() {
       const st = draw.drawStats({ cfg, planSlug: p.slug });
       log(`  ${C.bold}${p.slug}${C.reset}  ${p.name}`);
       log(
-        `    ${C.dim}共 ${st.total} 题　AC ${st.ac}　未AC ${st.notac}　未做 ${st.fresh}　待复习 ${st.due}${C.reset}`,
+        `    ${C.dim}共 ${st.total} 题　${statusCounts(st)}　待复习 ${st.due}${C.reset}`,
       );
     }
   };
@@ -463,9 +474,9 @@ async function cmdPlan({ positional }) {
     const due = r.due_date && r.due_date <= today ? C.red + ` 复习到期(${r.due_date})` + C.reset : '';
     const w = draw.computeWeight(r, cfg, { today }).weight;
     log(
-      `  ${String(r.frontend_id || '').padStart(4)} ${r.title_cn || r.title_en || r.slug}  ${statusCn(
+      `  ${String(r.frontend_id || '').padStart(4)} ${r.title_cn || r.title_en || r.slug}  ${coloredStatus(
         db.effectiveStatus(r),
-      )}  ${diffCn(r.difficulty)}  ${C.dim}w=${w.toFixed(2)}${C.reset}${due}`,
+      )}  ${difficultyCn(r.difficulty)}  ${C.dim}w=${w.toFixed(2)}${C.reset}${due}`,
     );
   });
   if (rows.length > limit) log(C.dim + `  …还有 ${rows.length - limit} 题（LC_PLAN_LIMIT 可调）` + C.reset);
@@ -507,7 +518,7 @@ async function cmdDraw({ flags }) {
     warn(`没有可抽的题目（模式=${mode}，题单=${planSlug || '全库'}）`);
     log(
       C.dim +
-        `  当前池子：共 ${pool.total}　AC ${pool.ac}　未AC ${pool.notac}　未做 ${pool.fresh}　到期 ${pool.due}` +
+        `  当前池子：共 ${pool.total}　${statusCounts(pool)}　到期 ${pool.due}` +
         C.reset,
     );
     return;
@@ -516,7 +527,7 @@ async function cmdDraw({ flags }) {
   head(`抽题结果（模式=${mode}${planSlug ? `，题单=${planSlug}` : ''}，候选 ${r.pool}）`);
   for (const p of r.picked) {
     log(
-      `  ${C.bold}${p.frontend_id}. ${p.title_cn || p.title_en || p.slug}${C.reset}  ${diffCn(
+      `  ${C.bold}${p.frontend_id}. ${p.title_cn || p.title_en || p.slug}${C.reset}  ${difficultyCn(
         p.difficulty,
       )}  ${C.dim}${p.slug}${C.reset}`,
     );

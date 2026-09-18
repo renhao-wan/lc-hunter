@@ -15,9 +15,9 @@
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-export const KAMA_BASE = 'https://kamacoder.com';
+const KAMA_BASE = 'https://kamacoder.com';
 
-export function kamaUrl(pid) {
+function kamaUrl(pid) {
   return `${KAMA_BASE}/problempage.php?pid=${encodeURIComponent(pid)}`;
 }
 
@@ -61,7 +61,7 @@ function safeCodePoint(n) {
 }
 
 /** HTML → 纯文本，保留换行 */
-export function htmlToText(html) {
+function htmlToText(html) {
   if (!html) return '';
   return decodeEntities(
     String(html)
@@ -91,7 +91,7 @@ function extractCode(html) {
 const QUOTE_RE = /<div class="quote[^"]*">/;
 
 /** 解析出各个小节 */
-export function parseKamaPage(html) {
+function parseKamaPage(html) {
   const sections = {};
   const re = /<h6 class="h6">([^<]*)<\/h6>/g;
   let m;
@@ -121,7 +121,7 @@ export function parseKamaPage(html) {
 
 // ---------------- 题库索引 ----------------
 
-export function problemsetUrl(page = 1, search = '') {
+function problemsetUrl(page = 1, search = '') {
   const q = new URLSearchParams();
   if (page > 1) q.set('page', String(page));
   if (search) q.set('search', search);
@@ -170,7 +170,7 @@ async function getPage(url, { timeoutMs = 15000 } = {}) {
 /**
  * 抓一页题库。返回 { items, maxPage, page }
  */
-export async function fetchProblemsetPage(page = 1, { search = '' } = {}) {
+async function fetchProblemsetPage(page = 1, { search = '' } = {}) {
   const url = problemsetUrl(page, search);
   const html = await getPage(url);
   return { page, url, items: parseListPage(html), maxPage: maxPageFromHtml(html) };
@@ -209,13 +209,6 @@ export async function fetchAllProblems({ onLog, maxPages = 20, emptyStreakLimit 
   }
 
   return [...all.values()];
-}
-
-/** 按关键词实时搜索（不依赖本地索引） */
-export async function searchByKeyword(keyword, { timeoutMs = 15000 } = {}) {
-  const url = problemsetUrl(1, keyword);
-  const html = await getPage(url, { timeoutMs });
-  return parseListPage(html).map((it) => ({ ...it, keyword }));
 }
 
 /** 抓取并在本地解析 */

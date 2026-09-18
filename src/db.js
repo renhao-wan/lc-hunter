@@ -197,11 +197,11 @@ export function getProblem(slug) {
  * 注意每个谓词都包了 COALESCE，保证结果是严格的 TRUE/FALSE 而不是 NULL ——
  * 否则 `NOT 谓词` 会算出 NULL，行会被静默丢掉，notac 就永远筛不出来。
  */
-export const SQL_IS_AC =
+const SQL_IS_AC =
   "(COALESCE(pg.lc_status, '') = 'ac' OR COALESCE(pg.local_ac_count, 0) > 0)";
-export const SQL_IS_NEW =
+const SQL_IS_NEW =
   "(COALESCE(pg.lc_status, '') IN ('', 'not_started') AND COALESCE(pg.local_run_count, 0) = 0)";
-export const SQL_IS_NOTAC = `(NOT ${SQL_IS_AC} AND NOT ${SQL_IS_NEW})`;
+const SQL_IS_NOTAC = `(NOT ${SQL_IS_AC} AND NOT ${SQL_IS_NEW})`;
 
 /** 上面 SQL 的 JS 版本，口径必须与之一致（抽题引擎和接口层用它） */
 export function effectiveStatus(row) {
@@ -215,30 +215,6 @@ export function effectiveStatus(row) {
 
 /** 每个查询都要带上这两列，否则 effectiveStatus 算不出来 */
 const PROGRESS_STATUS_COLS = 'pg.local_ac_count, pg.local_run_count';
-
-/**
- * 关键词搜索。
- * 字段要和 getAllProblemRows 对齐（带 lc_status / due_date），
- * 否则搜索结果里 AC 状态和复习标记会整片消失。
- */
-export function searchProblems(keyword, limit = 20) {
-  const like = `%${keyword}%`;
-  return getDb()
-    .prepare(
-      `SELECT pr.slug AS slug, NULL AS grp, 0 AS ord,
-              pr.frontend_id, pr.title_cn, pr.title_en, pr.difficulty, pr.paid_only,
-              pr.meta_data,
-              pg.lc_status, ${PROGRESS_STATUS_COLS}, pg.last_drawn_at, pg.draw_count,
-              rv.due_date, rv.repetitions, rv.easiness
-       FROM problems pr
-       LEFT JOIN progress pg ON pg.slug = pr.slug
-       LEFT JOIN reviews  rv ON rv.slug = pr.slug
-       WHERE pr.slug LIKE ? OR pr.title_cn LIKE ? OR pr.title_en LIKE ? OR pr.frontend_id = ?
-       ORDER BY CAST(pr.frontend_id AS INTEGER)
-       LIMIT ?`,
-    )
-    .all(like, like, like, keyword, limit);
-}
 
 export function updateProblemDetail(slug, d) {
   getDb()
@@ -447,14 +423,6 @@ export function listDue(limit = 50) {
     .all(limit);
 }
 
-export function countProblems() {
-  return getDb().prepare('SELECT COUNT(*) AS n FROM problems').get().n;
-}
-
-export function countDetailed() {
-  return getDb().prepare('SELECT COUNT(*) AS n FROM problems WHERE detail_fetched = 1').get().n;
-}
-
 // ---------- plans ----------
 export function upsertPlan(plan) {
   getDb()
@@ -496,12 +464,6 @@ export function listPlans({ source = null } = {}) {
 
 export function getPlan(slug) {
   return getDb().prepare('SELECT * FROM plans WHERE slug = ?').get(slug) || null;
-}
-
-export function deletePlan(slug) {
-  const db = getDb();
-  db.prepare('DELETE FROM plan_problems WHERE plan_slug = ?').run(slug);
-  db.prepare('DELETE FROM plans WHERE slug = ?').run(slug);
 }
 
 /** 抽题时用来把"非 Java 计划"的题过滤掉（SQL/Pandas/JS 专项计划） */
@@ -577,11 +539,6 @@ export function countKamaProblems() {
   return getDb().prepare('SELECT COUNT(*) AS n FROM kama_problems').get().n;
 }
 
-export function findKamaByKeyword(keyword) {
-  const like = `%${keyword}%`;
-  return getDb().prepare('SELECT pid, title FROM kama_problems WHERE title LIKE ? LIMIT 20').all(like);
-}
-
 // ---------- progress ----------
 export function upsertProgress(slug, { lcStatus }) {
   const db = getDb();
@@ -589,10 +546,6 @@ export function upsertProgress(slug, { lcStatus }) {
     `INSERT INTO progress (slug, lc_status, last_synced) VALUES (?, ?, ?)
      ON CONFLICT(slug) DO UPDATE SET lc_status = excluded.lc_status, last_synced = excluded.last_synced`,
   ).run(slug, lcStatus ?? null, Date.now());
-}
-
-export function getProgress(slug) {
-  return getDb().prepare('SELECT * FROM progress WHERE slug = ?').get(slug) || null;
 }
 
 export function markDrawn(slug) {
@@ -633,10 +586,6 @@ export function upsertReview(r) {
     .run(r.slug, r.easiness, r.intervalDays, r.repetitions, r.dueDate, r.lastReviewed);
 }
 
-export function countDue(dateStr) {
-  return getDb().prepare('SELECT COUNT(*) AS n FROM reviews WHERE due_date IS NOT NULL AND due_date <= ?').get(dateStr).n;
-}
-
 // ---------- attempts ----------
 export function addAttempt({ slug, mode, passed, total }) {
   getDb()
@@ -646,6 +595,11 @@ export function addAttempt({ slug, mode, passed, total }) {
 
 export function recentAttempts(limit = 10) {
   return getDb().prepare('SELECT * FROM attempts ORDER BY id DESC LIMIT ?').all(limit);
+}
+
+/** 某道题最近一次运行记录。没有记录返回 undefined。 */
+export function lastAttempt(slug) {
+  return getDb().prepare('SELECT * FROM attempts WHERE slug = ? ORDER BY id DESC LIMIT 1').get(slug);
 }
 
 export function stats() {

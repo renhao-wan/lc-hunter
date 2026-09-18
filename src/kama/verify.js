@@ -23,7 +23,7 @@ function nonEmptyLines(s) {
 }
 
 /** metaData 可能是字符串也可能是对象 */
-export function parseMetaData(md) {
+function parseMetaData(md) {
   if (!md) return null;
   if (typeof md === 'object') return md;
   try {

@@ -101,7 +101,7 @@ export const FEATURED_PLANS = [
  * 名企冲刺计划全量都是 Plus 专属（实测 studyPlanV2Detail 返回 0 题），
  * 所以只作为「如果你有会员，可以试试」的提示存在，不参与默认抽题。
  */
-export const COMPANY_SPRINT_PLANS = [
+const COMPANY_SPRINT_PLANS = [
   { slug: 'huawei-2023-fall-sprint', name: '华为秋招冲刺', lang: 'java' },
   { slug: 'tencent-2023-fall-sprint', name: '腾讯秋招高效备战', lang: 'java' },
   { slug: 'ali-2023-fall-sprint', name: '阿里秋招面试宝典', lang: 'java' },
@@ -122,7 +122,7 @@ export const COMPANY_SPRINT_PLANS = [
  * 明确排除的计划：这些计划里的题不是 Java 算法题，进来会污染题池。
  * 抽题引擎会拿这个集合做过滤，避免"抽到一道 SQL 题却发现没法写 Java"。
  */
-export const EXCLUDED_PLANS = new Set([
+const EXCLUDED_PLANS = new Set([
   'sql-free-50',
   'sql-premium-50',
   'introduction-to-pandas',
@@ -131,7 +131,7 @@ export const EXCLUDED_PLANS = new Set([
 ]);
 
 /** slug → 计划元信息（仅供内置清单用；官方接口同步来的计划也会走一次标注） */
-export const PLAN_META = new Map([
+const PLAN_META = new Map([
   ...FEATURED_PLANS.map((p) => [p.slug, { ...p }]),
   ...COMPANY_SPRINT_PLANS.map((p) => [p.slug, { ...p, group: '名企冲刺', plusOnly: true }]),
 ]);

@@ -7,10 +7,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const PROJECT_ROOT = path.resolve(__dirname, '..');
 export const DATA_DIR = path.join(PROJECT_ROOT, '.lc');
 export const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
-export const CRED_PATH = path.join(DATA_DIR, 'credentials.json');
+const CRED_PATH = path.join(DATA_DIR, 'credentials.json');
 export const DB_PATH = path.join(DATA_DIR, 'lc-hunter.db');
 
-export const DEFAULT_CONFIG = {
+const DEFAULT_CONFIG = {
   // 站点：https://leetcode.cn 或 https://leetcode.com
   site: 'https://leetcode.cn',
   // 默认刷题语言（对应 src/lang/<lang>/profile.js）
@@ -83,7 +83,7 @@ export function loadConfig() {
   return deepMerge(DEFAULT_CONFIG, user);
 }
 
-export function saveConfig(cfg) {
+function saveConfig(cfg) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const merged = deepMerge(DEFAULT_CONFIG, cfg);
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf8');

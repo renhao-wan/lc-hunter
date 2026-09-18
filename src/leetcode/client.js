@@ -26,7 +26,7 @@ export function normalizeStatus(s) {
   return null;
 }
 
-export class LeetCodeError extends Error {
+class LeetCodeError extends Error {
   constructor(message, { status, payload } = {}) {
     super(message);
     this.name = 'LeetCodeError';

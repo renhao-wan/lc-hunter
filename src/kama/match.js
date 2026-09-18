@@ -7,7 +7,7 @@
  */
 
 /** 归一化：去序号前缀、去空白标点、全角转半角、小写 */
-export function normalizeTitle(t) {
+function normalizeTitle(t) {
   if (!t) return '';
   return String(t)
     .replace(/^\d+\s*[.、:：]\s*/, '') // "21. 构造二叉树" -> "构造二叉树"
@@ -21,7 +21,7 @@ export function normalizeTitle(t) {
 /**
  * 打分：1 = 完全可信，0 = 完全不相关
  */
-export function scoreMatch(lcTitle, kamaTitle) {
+function scoreMatch(lcTitle, kamaTitle) {
   const a = normalizeTitle(lcTitle);
   const b = normalizeTitle(kamaTitle);
   if (!a || !b) return 0;
